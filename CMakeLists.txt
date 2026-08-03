@@ -5,6 +5,7 @@ project(BRKNAM VERSION 0.1.0 LANGUAGES C CXX)
 option(BRKNAM_BUILD_TOOLS "Build BRKNAM command-line tools" ON)
 option(BRKNAM_BUILD_TESTS "Build BRKNAM tests" ON)
 option(BRKNAM_USE_SYSTEM_SQLITE "Use a system SQLite library instead of the pinned amalgamation" OFF)
+option(BRKNAM_ENABLE_NAM_CORE "Build the pinned NeuralAmpModelerCore adapter" OFF)
 
 if(BRKNAM_USE_SYSTEM_SQLITE)
   find_package(SQLite3 REQUIRED)
@@ -71,6 +72,81 @@ else()
   target_compile_options(brknam_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion)
 endif()
 
+if(BRKNAM_ENABLE_NAM_CORE)
+  include(cmake/DependencyPins.cmake)
+  include(FetchContent)
+  find_package(Threads REQUIRED)
+
+  FetchContent_Declare(
+    brknam_nam_core_source
+    GIT_REPOSITORY ${BRKNAM_NAM_CORE_REPOSITORY}
+    GIT_TAG ${BRKNAM_NAM_CORE_COMMIT}
+    GIT_SHALLOW FALSE
+    GIT_PROGRESS TRUE
+    GIT_SUBMODULES Dependencies/eigen
+    GIT_SUBMODULES_RECURSE TRUE
+    SOURCE_SUBDIR brknam-no-cmake-project
+  )
+  FetchContent_MakeAvailable(brknam_nam_core_source)
+
+  file(GLOB BRKNAM_NAM_SOURCES_TOP CONFIGURE_DEPENDS
+    "${brknam_nam_core_source_SOURCE_DIR}/NAM/*.cpp"
+    "${brknam_nam_core_source_SOURCE_DIR}/NAM/*.c"
+  )
+  file(GLOB BRKNAM_NAM_SOURCES_SUB CONFIGURE_DEPENDS
+    "${brknam_nam_core_source_SOURCE_DIR}/NAM/*/*.cpp"
+  )
+
+  add_library(brknam_nam_core STATIC
+    ${BRKNAM_NAM_SOURCES_TOP}
+    ${BRKNAM_NAM_SOURCES_SUB}
+  )
+  add_library(BRKNAM::nam_core ALIAS brknam_nam_core)
+  target_compile_features(brknam_nam_core PUBLIC cxx_std_20)
+  target_compile_definitions(brknam_nam_core
+    PUBLIC NAM_SAMPLE_FLOAT
+    PRIVATE NAM_ENABLE_A2_FAST
+  )
+  target_include_directories(brknam_nam_core
+    PUBLIC
+      ${brknam_nam_core_source_SOURCE_DIR}
+      ${brknam_nam_core_source_SOURCE_DIR}/Dependencies/eigen
+      ${brknam_nam_core_source_SOURCE_DIR}/Dependencies/nlohmann
+  )
+  target_link_libraries(brknam_nam_core PRIVATE Threads::Threads)
+  set_target_properties(brknam_nam_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    CXX_VISIBILITY_PRESET hidden
+  )
+  if(WIN32)
+    target_compile_definitions(brknam_nam_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  endif()
+  if(MSVC)
+    target_compile_options(brknam_nam_core PRIVATE /bigobj)
+  endif()
+
+  add_library(brknam_nam_adapter
+    src/audio/NamCoreModel.cpp
+  )
+  add_library(BRKNAM::nam_adapter ALIAS brknam_nam_adapter)
+  target_compile_features(brknam_nam_adapter PUBLIC cxx_std_20)
+  target_include_directories(brknam_nam_adapter PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+  target_link_libraries(brknam_nam_adapter
+    PUBLIC BRKNAM::core
+    PRIVATE BRKNAM::nam_core
+  )
+  if(MSVC)
+    target_compile_options(brknam_nam_adapter PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(brknam_nam_adapter PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion
+    )
+  endif()
+endif()
+
 if(BRKNAM_BUILD_TOOLS)
   add_executable(brknam-scan tools/brknam_scan.cpp)
   target_link_libraries(brknam-scan PRIVATE BRKNAM::core)
@@ -113,6 +189,14 @@ if(BRKNAM_BUILD_TESTS)
   target_link_libraries(brknam-audio-tests PRIVATE BRKNAM::core)
   target_compile_features(brknam-audio-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-audio-tests COMMAND brknam-audio-tests)
+
+  if(BRKNAM_ENABLE_NAM_CORE)
+    add_executable(brknam-nam-core-tests tests/NamCoreModelTests.cpp)
+    target_link_libraries(brknam-nam-core-tests PRIVATE BRKNAM::nam_adapter)
+    target_compile_features(brknam-nam-core-tests PRIVATE cxx_std_20)
+    add_test(NAME brknam-nam-core-tests COMMAND brknam-nam-core-tests)
+    set_tests_properties(brknam-nam-core-tests PROPERTIES LABELS nam-core)
+  endif()
 
   add_executable(brknam-library-benchmark tests/LibrarySearchBenchmark.cpp)
   target_link_libraries(brknam-library-benchmark PRIVATE BRKNAM::core BRKNAM::sqlite)

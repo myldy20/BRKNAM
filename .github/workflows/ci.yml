@@ -24,3 +24,26 @@ jobs:
         run: cmake --build build --config Release
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  nam-core-build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure NAM Core adapter
+        run: >-
+          cmake -S . -B build-nam
+          -DBRKNAM_ENABLE_NAM_CORE=ON
+          -DBRKNAM_BUILD_TESTS=ON
+          -DBRKNAM_BUILD_TOOLS=OFF
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build NAM Core adapter
+        run: cmake --build build-nam --config Release
+      - name: Test NAM Core adapter
+        run: >-
+          ctest --test-dir build-nam -C Release
+          --output-on-failure -L nam-core
