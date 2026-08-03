@@ -57,7 +57,7 @@ jobs:
             -DBRKNAM_BUILD_TOOLS=OFF \
             -DIPLUG_DEPLOY_PLUGINS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Build APP VST3 and AU
