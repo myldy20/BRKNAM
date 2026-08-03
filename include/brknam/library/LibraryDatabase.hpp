@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2026 Myldy design / @myldy20
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 // See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #pragma once
@@ -42,6 +42,7 @@ struct AssetRecord {
   AssetKind kind{AssetKind::nam_model};
   std::uintmax_t size_bytes{};
   std::int64_t modified_ticks{};
+  std::optional<std::string> content_sha256;
   bool missing{false};
   ParseStatus parse_status{ParseStatus::not_applicable};
   std::optional<std::string> parse_error;
@@ -67,6 +68,7 @@ struct RefreshStats {
   std::size_t discovered{};
   std::size_t inserted{};
   std::size_t updated{};
+  std::size_t moved{};
   std::size_t unchanged{};
   std::size_t parse_errors{};
   std::size_t newly_missing{};
@@ -104,6 +106,9 @@ class LibraryDatabase final {
       const SearchOptions& options = {}) const;
   [[nodiscard]] std::optional<AssetRecord> asset(std::int64_t asset_id) const;
   [[nodiscard]] std::vector<AssetRecord> recent(std::size_t limit = 20) const;
+
+  [[nodiscard]] std::string ensure_sha256(std::int64_t asset_id);
+  [[nodiscard]] std::vector<AssetRecord> duplicate_group(std::int64_t asset_id);
 
   void set_favorite(std::int64_t asset_id, bool favorite);
   void set_rating(std::int64_t asset_id, std::optional<int> rating);

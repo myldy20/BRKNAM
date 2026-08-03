@@ -49,6 +49,7 @@ add_library(brknam_core
   src/library/LibraryDatabaseRefresh.cpp
   src/library/LibraryDatabaseSupport.cpp
   src/library/LibraryScanner.cpp
+  src/library/Sha256.cpp
   src/nam/NamMetadataReader.cpp
 )
 add_library(BRKNAM::core ALIAS brknam_core)
@@ -97,7 +98,7 @@ if(BRKNAM_BUILD_TESTS)
   add_test(NAME brknam-nam-tests COMMAND brknam-nam-tests)
 
   add_executable(brknam-library-tests tests/LibraryDatabaseTests.cpp)
-  target_link_libraries(brknam-library-tests PRIVATE BRKNAM::core)
+  target_link_libraries(brknam-library-tests PRIVATE BRKNAM::core BRKNAM::sqlite)
   target_compile_features(brknam-library-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-library-tests COMMAND brknam-library-tests)
 endif()
