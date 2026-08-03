@@ -40,17 +40,20 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 
 ## E2 — One-slot NAM player
 
-**Status: next.**
+**Status: in progress.**
 
 **Goal:** load and process one NAM model safely in real time.
 
-- [ ] Pin `NeuralAmpModelerCore` and required permissive dependencies.
-- [ ] Implement the framework-neutral processor wrapper.
-- [ ] Add input/output trim, bypass, normalization, DC blocker, and model information.
-- [ ] Load models on a worker thread and swap at block boundaries.
-- [ ] Implement deferred graph destruction and click-free crossfade.
-- [ ] Calculate and report processing latency correctly.
-- [ ] Add reference-vector and sample-rate tests.
+- [x] Pin `NeuralAmpModelerCore` and its reviewed permissive dependencies.
+- [x] Implement the framework-neutral processor wrapper.
+- [x] Add input/output trim, bypass, normalization, post-model DC blocker, and model information.
+- [x] Build and execute real `.nam` fixtures through the pinned Core on Linux, macOS, and Windows.
+- [ ] Add a coalescing worker that loads and prepares requested model paths outside the audio thread.
+- [x] Publish prepared models at block boundaries.
+- [x] Implement bounded deferred graph destruction and a 20 ms click-free crossfade.
+- [x] Report the maximum active latency while crossfading and the settled model latency afterwards.
+- [ ] Add model-rate resampling and include its latency in the reported total.
+- [ ] Add representative A1/A2 reference-vector and sample-rate tests.
 - [ ] Create initial iPlug2 VST3, AU, and standalone targets.
 
 **Exit:** plugin validation passes; repeated model switching under audio load produces no crash, blocking call, or discontinuity above the defined threshold.
