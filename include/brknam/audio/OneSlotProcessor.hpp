@@ -51,6 +51,7 @@ enum class ProcessStatus {
 class OneSlotProcessor final {
  public:
   static constexpr std::size_t kMaximumExternalChannels = 2;
+  static constexpr std::size_t kRetiredModelQueueCapacity = 16;
   static constexpr double kDcBlockerCutoffHz = 5.0;
   static constexpr double kNormalizationTargetDb = -18.0;
   static constexpr double kModelCrossfadeMilliseconds = 20.0;
