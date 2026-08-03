@@ -14,7 +14,11 @@ BRKNAM can recursively discover local NAM/IR assets, safely read NAM metadata wi
 
 Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move. Saved searches and stable JSON CLI output are included.
 
-Development now moves to **E2 — One-slot NAM player**: the framework-independent audio processor, NeuralAmpModelerCore integration, realtime-safe model switching, and initial VST3/AU/standalone targets.
+**E2 — One-slot NAM player is feature-complete for automated validation and is entering manual alpha testing.**
+
+The current product shell builds as a Windows/macOS standalone application, VST3, and macOS Audio Unit. It uses the pinned NeuralAmpModelerCore, supports representative A1/A2 models, loads models outside the audio thread, performs click-reduced block-boundary replacement, adapts model sample rates, and reports processing latency to the host. Steinberg VST3 Validator, Apple `auval`, cross-platform reference tests, and concurrent switching stress tests pass in CI.
+
+Unsigned downloadable test packages are produced by the **Alpha packages** GitHub Actions workflow. See [the alpha test guide](docs/ALPHA_TESTING.md) before installing them.
 
 ## Product principles
 
@@ -25,7 +29,7 @@ Development now moves to **E2 — One-slot NAM player**: the framework-independe
 - **Realtime-safe audio:** no file I/O, network calls, locks, or allocation in the audio callback.
 - **Open formats:** portable presets and an inspectable local index.
 
-## Current build
+## Build the core and tools
 
 Requirements: CMake 3.24+, a C++20 compiler, and internet access during the first default configure so CMake can download the pinned SQLite amalgamation. A compatible system SQLite can be selected explicitly.
 
@@ -65,13 +69,23 @@ Put `--json` before the database path to receive stable machine-readable output 
 ./build/brknam-library --json library.sqlite3 search "5150 crunch"
 ```
 
-## Planned targets
+## Build the plugin shell
 
-- VST3 and Audio Unit plugin
-- standalone desktop application
-- later: CLAP and Linux packaging
+The optional product build fetches the pinned NeuralAmpModelerCore, iPlug2, and official Steinberg VST3 SDK sources.
 
-See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), and [product definition](docs/PRODUCT.md).
+```sh
+cmake -S . -B build-plugin \
+  -DBRKNAM_ENABLE_IPLUG2=ON \
+  -DBRKNAM_BUILD_TESTS=OFF \
+  -DBRKNAM_BUILD_TOOLS=OFF \
+  -DIPLUG_DEPLOY_PLUGINS=OFF \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build-plugin --config Release
+```
+
+Current targets are Windows/macOS standalone, VST3, and macOS AU. Later targets include CLAP and Linux packaging.
+
+See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), [product definition](docs/PRODUCT.md), and [alpha test guide](docs/ALPHA_TESTING.md).
 
 ## Licensing
 
