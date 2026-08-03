@@ -25,7 +25,7 @@ This is an **unsigned development build** intended for functional testing. It is
 
 ## macOS installation
 
-The archive is universal and contains Intel and Apple Silicon binaries.
+The archive requires **macOS 11 or newer** and contains Intel and Apple Silicon binaries.
 
 1. Copy `Standalone/BRKNAM.app` to `/Applications` or run it from the extracted folder.
 2. Copy `VST3/BRKNAM.vst3` to `~/Library/Audio/Plug-Ins/VST3/`.
