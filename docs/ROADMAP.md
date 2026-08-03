@@ -4,6 +4,8 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 
 ## E0 — Repository and engineering baseline
 
+**Status: complete.**
+
 **Goal:** establish a buildable, legally clear, testable project.
 
 - [x] Product definition and architecture.
@@ -12,11 +14,13 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Cross-platform CI for Linux, macOS, and Windows.
 - [x] Initial recursive local asset scanner.
 - [x] Scanner CLI and tests.
-- [ ] Add formatter and static-analysis jobs after the baseline compilers are green.
+- [ ] Add formatter and static-analysis jobs during release hardening.
 
 **Exit:** clean configure/build/test on all three CI operating systems.
 
 ## E1 — Local library foundation
+
+**Status: complete.**
 
 **Goal:** turn arbitrary folders into a reliable searchable catalog.
 
@@ -24,28 +28,30 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Reject malformed or unsupported files without crashing or blocking the rest of the scan.
 - [x] Add a versioned SQLite schema and FTS5 search.
 - [x] Add multiple library roots, incremental scan, missing-file tracking, and manual CLI rescan.
-- [ ] Add lazy SHA-256 hashing, duplicate grouping, and moved-file recovery.
+- [x] Add lazy SHA-256 hashing, duplicate grouping, and moved-file recovery.
 - [x] Add favorites, ratings, user tags, and recent models.
-- [ ] Add saved searches.
+- [x] Add saved searches.
 - [x] Expose a library service independent of the eventual UI framework.
-- [ ] Extend command-line diagnostics with stable machine-readable JSON output.
-- [ ] Add a 25,000-record benchmark and explicit interactive-search threshold.
-- [ ] Add migration fixtures for every schema version after schema version 1.
+- [x] Extend command-line diagnostics with stable machine-readable JSON output.
+- [x] Add a 25,000-record benchmark with a 100 ms average interactive-search threshold.
+- [x] Add migration fixtures for schema versions 1 and 2.
 
-**Exit:** 25,000 synthetic records search interactively; fixture libraries rescan deterministically; schema migration tests pass.
+**Exit:** 25,000 synthetic records search within the defined interactive threshold; fixture libraries rescan deterministically; schema migrations and JSON compatibility tests pass.
 
 ## E2 — One-slot NAM player
 
+**Status: next.**
+
 **Goal:** load and process one NAM model safely in real time.
 
-- Pin `NeuralAmpModelerCore` and required permissive dependencies.
-- Implement the framework-neutral processor wrapper.
-- Add input/output trim, bypass, normalization, DC blocker, and model information.
-- Load models on a worker thread and swap at block boundaries.
-- Implement deferred graph destruction and click-free crossfade.
-- Calculate and report processing latency correctly.
-- Add reference-vector and sample-rate tests.
-- Create initial iPlug2 VST3, AU, and standalone targets.
+- [ ] Pin `NeuralAmpModelerCore` and required permissive dependencies.
+- [ ] Implement the framework-neutral processor wrapper.
+- [ ] Add input/output trim, bypass, normalization, DC blocker, and model information.
+- [ ] Load models on a worker thread and swap at block boundaries.
+- [ ] Implement deferred graph destruction and click-free crossfade.
+- [ ] Calculate and report processing latency correctly.
+- [ ] Add reference-vector and sample-rate tests.
+- [ ] Create initial iPlug2 VST3, AU, and standalone targets.
 
 **Exit:** plugin validation passes; repeated model switching under audio load produces no crash, blocking call, or discontinuity above the defined threshold.
 

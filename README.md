@@ -8,11 +8,13 @@ BRKNAM is a local-first tool for finding, auditioning, organizing, and playing N
 
 ## Status
 
-Early development. The E1 foundation can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+**E1 — Local library foundation is complete.**
 
-Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move.
+BRKNAM can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
 
-Audio processing and plugin targets begin in E2 after the local-library contract is stable.
+Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move. Saved searches and stable JSON CLI output are included.
+
+Development now moves to **E2 — One-slot NAM player**: the framework-independent audio processor, NeuralAmpModelerCore integration, realtime-safe model switching, and initial VST3/AU/standalone targets.
 
 ## Product principles
 
@@ -46,10 +48,21 @@ On multi-config generators, add `--config Release` when building and `-C Release
 ```sh
 ./build/brknam-scan /path/to/your/NAM/library
 ./build/brknam-inspect /path/to/model.nam
+
 ./build/brknam-library library.sqlite3 index /path/to/your/NAM/library
 ./build/brknam-library library.sqlite3 search "5150 crunch"
 ./build/brknam-library library.sqlite3 hash 42
 ./build/brknam-library library.sqlite3 duplicates 42
+
+./build/brknam-library library.sqlite3 save-search "High gain" "5150 crunch" 0 100
+./build/brknam-library library.sqlite3 list-searches
+./build/brknam-library library.sqlite3 run-search 1
+```
+
+Put `--json` before the database path to receive stable machine-readable output and diagnostics:
+
+```sh
+./build/brknam-library --json library.sqlite3 search "5150 crunch"
 ```
 
 ## Planned targets
