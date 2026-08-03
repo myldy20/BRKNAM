@@ -4,6 +4,8 @@
 
 #include "brknam/audio/OneSlotProcessor.hpp"
 
+#include "RealtimeModelSlot.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -16,19 +18,6 @@ namespace {
 
 [[nodiscard]] float db_to_gain(const float db) noexcept {
   return std::pow(10.0F, db / 20.0F);
-}
-
-[[nodiscard]] float normalized_gain_db(const MonoModel* model,
-                                       const OutputMode mode) noexcept {
-  if (model == nullptr || mode != OutputMode::normalized) {
-    return 0.0F;
-  }
-  const auto info = model->info();
-  if (!info.loudness_db.has_value() || !std::isfinite(*info.loudness_db)) {
-    return 0.0F;
-  }
-  return static_cast<float>(OneSlotProcessor::kNormalizationTargetDb -
-                            *info.loudness_db);
 }
 
 void clear_outputs(float* const* outputs, const std::size_t output_channels,
@@ -46,9 +35,9 @@ void clear_outputs(float* const* outputs, const std::size_t output_channels,
 }  // namespace
 
 struct OneSlotProcessor::Impl {
+  detail::RealtimeModelSlot model_slot;
   std::vector<float> mono_input;
   std::vector<float> mono_output;
-  MonoModel* model{};
   std::atomic<float> input_trim_db{0.0F};
   std::atomic<float> output_trim_db{0.0F};
   std::atomic<bool> model_bypassed{false};
@@ -93,22 +82,36 @@ void OneSlotProcessor::prepare(const double sample_rate_hz,
   impl_->maximum_block_frames = maximum_block_frames;
   impl_->dc_coefficient = static_cast<float>(
       std::exp(-2.0 * std::numbers::pi * kDcBlockerCutoffHz / sample_rate_hz));
+  const auto crossfade_frames = std::max<std::size_t>(
+      1, static_cast<std::size_t>(std::llround(
+             sample_rate_hz * kModelCrossfadeMilliseconds / 1000.0)));
+  impl_->model_slot.prepare(maximum_block_frames, crossfade_frames);
   impl_->prepared = true;
   reset();
-
-  if (impl_->model != nullptr) {
-    impl_->model->prepare(sample_rate_hz, maximum_block_frames);
-  }
 }
 
-void OneSlotProcessor::attach_prepared_model(MonoModel* const model) noexcept {
-  if (impl_ != nullptr) {
-    impl_->model = model;
+void OneSlotProcessor::publish_prepared_model(
+    std::unique_ptr<MonoModel> model) {
+  if (impl_ == nullptr) {
+    throw std::logic_error("Cannot publish to a moved-from processor");
   }
+  impl_->model_slot.publish(std::move(model));
 }
 
-void OneSlotProcessor::detach_model() noexcept {
-  attach_prepared_model(nullptr);
+void OneSlotProcessor::detach_model() {
+  publish_prepared_model(nullptr);
+}
+
+std::size_t OneSlotProcessor::collect_retired_models() noexcept {
+  return impl_ != nullptr ? impl_->model_slot.collect_retired() : 0;
+}
+
+bool OneSlotProcessor::has_pending_model_change() const noexcept {
+  return impl_ != nullptr && impl_->model_slot.has_pending_change();
+}
+
+bool OneSlotProcessor::model_crossfade_active() const noexcept {
+  return impl_ != nullptr && impl_->model_slot.crossfade_active();
 }
 
 void OneSlotProcessor::set_input_trim_db(const float value) noexcept {
@@ -159,14 +162,13 @@ OutputMode OneSlotProcessor::output_mode() const noexcept {
 }
 
 int OneSlotProcessor::latency_samples() const noexcept {
-  return impl_ != nullptr && impl_->model != nullptr && !model_bypassed()
-             ? std::max(0, impl_->model->info().latency_samples)
+  return impl_ != nullptr && !model_bypassed()
+             ? impl_->model_slot.latency_samples()
              : 0;
 }
 
 ModelInfo OneSlotProcessor::model_info() const noexcept {
-  return impl_ != nullptr && impl_->model != nullptr ? impl_->model->info()
-                                                     : ModelInfo{};
+  return impl_ != nullptr ? impl_->model_slot.model_info() : ModelInfo{};
 }
 
 ProcessStatus OneSlotProcessor::process(
@@ -219,11 +221,12 @@ ProcessStatus OneSlotProcessor::process(
 
   const auto bypassed =
       impl_->model_bypassed.load(std::memory_order_relaxed);
-  if (impl_->model != nullptr && !bypassed) {
-    impl_->model->process(impl_->mono_input.data(), impl_->mono_output.data(),
-                          frames);
-  } else {
+  if (bypassed) {
     std::copy_n(impl_->mono_input.data(), frames, impl_->mono_output.data());
+  } else {
+    impl_->model_slot.process(
+        impl_->mono_input.data(), impl_->mono_output.data(), frames,
+        impl_->output_mode.load(std::memory_order_relaxed));
   }
 
   // NAM captures can produce a DC component; mirror the official plugin's
@@ -242,11 +245,8 @@ ProcessStatus OneSlotProcessor::process(
   impl_->previous_dc_input = previous_input;
   impl_->previous_dc_output = previous_output;
 
-  const auto mode = impl_->output_mode.load(std::memory_order_relaxed);
-  const auto total_output_db =
-      impl_->output_trim_db.load(std::memory_order_relaxed) +
-      normalized_gain_db(impl_->model, mode);
-  const auto output_gain = db_to_gain(total_output_db);
+  const auto output_gain =
+      db_to_gain(impl_->output_trim_db.load(std::memory_order_relaxed));
   for (std::size_t channel = 0; channel < output_channels; ++channel) {
     for (std::size_t frame = 0; frame < frames; ++frame) {
       outputs[channel][frame] = impl_->mono_output[frame] * output_gain;
