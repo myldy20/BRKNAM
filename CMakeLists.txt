@@ -108,8 +108,8 @@ if(BRKNAM_ENABLE_NAM_CORE)
     PRIVATE NAM_ENABLE_A2_FAST
   )
   target_include_directories(brknam_nam_core
-    PUBLIC ${brknam_nam_core_source_SOURCE_DIR}
-    PRIVATE
+    PUBLIC
+      ${brknam_nam_core_source_SOURCE_DIR}
       ${brknam_nam_core_source_SOURCE_DIR}/Dependencies/eigen
       ${brknam_nam_core_source_SOURCE_DIR}/Dependencies/nlohmann
   )
