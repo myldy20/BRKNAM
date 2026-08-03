@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
@@ -97,11 +98,12 @@ void NamCoreModel::prepare(const double sample_rate_hz,
         "available in this E2 slice");
   }
 
+  impl_->prepared = false;
   impl_->dsp->SetPrewarmOnReset(true);
   impl_->dsp->Reset(sample_rate_hz,
                     static_cast<int>(maximum_block_frames));
-  impl_->prepared = true;
   impl_->info = read_info(*impl_->dsp);
+  impl_->prepared = true;
 }
 
 void NamCoreModel::process(const float* input, float* output,
