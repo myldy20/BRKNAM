@@ -45,6 +45,7 @@ endif()
 add_library(BRKNAM::sqlite ALIAS brknam_sqlite)
 
 add_library(brknam_core
+  src/audio/OneSlotProcessor.cpp
   src/library/LibraryDatabase.cpp
   src/library/LibraryDatabaseRefresh.cpp
   src/library/LibraryDatabaseSavedSearches.cpp
@@ -107,6 +108,11 @@ if(BRKNAM_BUILD_TESTS)
   target_link_libraries(brknam-json-tests PRIVATE BRKNAM::core)
   target_compile_features(brknam-json-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-json-tests COMMAND brknam-json-tests)
+
+  add_executable(brknam-audio-tests tests/OneSlotProcessorTests.cpp)
+  target_link_libraries(brknam-audio-tests PRIVATE BRKNAM::core)
+  target_compile_features(brknam-audio-tests PRIVATE cxx_std_20)
+  add_test(NAME brknam-audio-tests COMMAND brknam-audio-tests)
 
   add_executable(brknam-library-benchmark tests/LibrarySearchBenchmark.cpp)
   target_link_libraries(brknam-library-benchmark PRIVATE BRKNAM::core BRKNAM::sqlite)
