@@ -47,6 +47,7 @@ add_library(BRKNAM::sqlite ALIAS brknam_sqlite)
 
 add_library(brknam_core
   src/audio/OneSlotProcessor.cpp
+  src/audio/RealtimeModelSlot.cpp
   src/library/LibraryDatabase.cpp
   src/library/LibraryDatabaseRefresh.cpp
   src/library/LibraryDatabaseSavedSearches.cpp
