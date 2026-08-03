@@ -18,22 +18,21 @@ using namespace igraphics;
 
 namespace {
 
-constexpr IColor kBackground{255, 22, 24, 27};
-constexpr IColor kPanel{255, 35, 38, 43};
-constexpr IColor kText{255, 232, 235, 239};
-constexpr IColor kMutedText{255, 158, 164, 173};
-constexpr IColor kAccent{255, 234, 179, 8};
+const IColor kBackground{255, 22, 24, 27};
+const IColor kPanel{255, 35, 38, 43};
+const IColor kText{255, 232, 235, 239};
+const IColor kMutedText{255, 158, 164, 173};
+const IColor kAccent{255, 234, 179, 8};
+const IColor kPressedAccent{255, 184, 138, 4};
 
 IVStyle make_style() {
-  auto colors = DEFAULT_COLOR_SPEC;
-  colors.SetColor(EVColor::kBG, kPanel);
-  colors.SetColor(EVColor::kFG, kAccent);
-  colors.SetColor(EVColor::kPR, kAccent.WithContrast(-0.2F));
-  colors.SetColor(EVColor::kFR, kMutedText);
-  colors.SetColor(EVColor::kHL, kAccent);
-  colors.SetColor(EVColor::kSH, COLOR_BLACK);
-  colors.SetColor(EVColor::kX1, kText);
-  return IVStyle{true, true, colors};
+  return DEFAULT_STYLE.WithColor(kBG, kPanel)
+      .WithColor(kFG, kAccent)
+      .WithColor(kPR, kPressedAccent)
+      .WithColor(kFR, kMutedText)
+      .WithColor(kHL, kAccent)
+      .WithColor(kSH, COLOR_BLACK)
+      .WithColor(kX1, kText);
 }
 
 void clear_host_outputs(sample** outputs, const int output_channels,
