@@ -18,6 +18,43 @@ find_bundle() {
   find "${build_dir}/out" -type d -name "BRKNAM.${suffix}" -print -quit
 }
 
+bundle_executable() {
+  local bundle="$1"
+  local plist="${bundle}/Contents/Info.plist"
+  local executable_name=""
+  local executable_path=""
+
+  if [[ -f "${plist}" ]]; then
+    executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "${plist}" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "${executable_name}" ]]; then
+    executable_path="${bundle}/Contents/MacOS/${executable_name}"
+  fi
+
+  if [[ -z "${executable_path}" || ! -f "${executable_path}" ]]; then
+    executable_path="$(find "${bundle}/Contents/MacOS" -maxdepth 1 -type f -perm -111 -print -quit 2>/dev/null || true)"
+  fi
+
+  if [[ -z "${executable_path}" || ! -f "${executable_path}" ]]; then
+    echo "No bundle executable was found in ${bundle}" >&2
+    find "${bundle}/Contents" -maxdepth 3 -print >&2 || true
+    return 1
+  fi
+
+  printf '%s\n' "${executable_path}"
+}
+
+verify_bundle() {
+  local bundle="$1"
+  local executable=""
+
+  executable="$(bundle_executable "${bundle}")"
+  echo "Verifying universal executable: ${executable}"
+  lipo -verify_arch x86_64 arm64 "${executable}"
+  codesign --verify --deep --strict --verbose=2 "${bundle}"
+}
+
 app_bundle="$(find_bundle app)"
 vst3_bundle="$(find_bundle vst3)"
 au_bundle="$(find_bundle component)"
@@ -25,6 +62,7 @@ au_bundle="$(find_bundle component)"
 for bundle in "${app_bundle}" "${vst3_bundle}" "${au_bundle}"; do
   if [[ -z "${bundle}" || ! -d "${bundle}" ]]; then
     echo "Required BRKNAM bundle is missing under ${build_dir}/out" >&2
+    find "${build_dir}/out" -maxdepth 5 -print >&2 || true
     exit 1
   fi
 done
@@ -41,21 +79,16 @@ cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${stage_dir}/THIRD_PARTY_NOTICES.md"
 cp "${repo_root}/docs/ALPHA_TESTING.md" "${stage_dir}/README.md"
 
 commit="${GITHUB_SHA:-unknown}"
-printf 'BRKNAM %s\nSource commit: %s\nBuild: unsigned universal macOS alpha\n' \
+printf 'BRKNAM %s\nSource commit: %s\nBuild: ad-hoc-signed universal macOS alpha\nMinimum macOS: 11.0\n' \
   "${version}" "${commit}" > "${stage_dir}/BUILD-INFO.txt"
 
-for bundle in \
-  "${stage_dir}/Standalone/BRKNAM.app" \
-  "${stage_dir}/VST3/BRKNAM.vst3" \
-  "${stage_dir}/Audio Unit/BRKNAM.component"; do
-  codesign --force --deep --sign - "${bundle}"
-done
+staged_app="${stage_dir}/Standalone/BRKNAM.app"
+staged_vst3="${stage_dir}/VST3/BRKNAM.vst3"
+staged_au="${stage_dir}/Audio Unit/BRKNAM.component"
 
-for binary in \
-  "${stage_dir}/Standalone/BRKNAM.app/Contents/MacOS/BRKNAM" \
-  "${stage_dir}/VST3/BRKNAM.vst3/Contents/MacOS/BRKNAM" \
-  "${stage_dir}/Audio Unit/BRKNAM.component/Contents/MacOS/BRKNAM"; do
-  lipo -verify_arch x86_64 arm64 "${binary}"
+for bundle in "${staged_app}" "${staged_vst3}" "${staged_au}"; do
+  codesign --force --deep --sign - "${bundle}"
+  verify_bundle "${bundle}"
 done
 
 mkdir -p "${dist_dir}"
