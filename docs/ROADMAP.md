@@ -54,7 +54,8 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Report the maximum active latency while crossfading and the settled model latency afterwards.
 - [x] Add model-rate resampling and include its latency in the reported total.
 - [x] Add representative A1/A2 reference-vector and sample-rate tests.
-- [ ] Create initial iPlug2 VST3, AU, and standalone targets.
+- [x] Create initial iPlug2 VST3, AU, and standalone targets.
+- [ ] Run plugin validation and repeated model-switch stress tests in real hosts.
 
 **Exit:** plugin validation passes; repeated model switching under audio load produces no crash, blocking call, or discontinuity above the defined threshold.
 
