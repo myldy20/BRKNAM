@@ -309,7 +309,7 @@ void test_retirement_backpressure_never_deletes_in_callback() {
 
   const auto first_collection = processor.collect_retired_models();
   require(first_collection ==
-              brknam::audio::detail::RealtimeModelSlot::kRetiredQueueCapacity,
+              brknam::audio::OneSlotProcessor::kRetiredModelQueueCapacity,
           "collector should drain the bounded retire queue");
   process_mono(processor, input.data(), output.data(), input.size());
   require(!processor.has_pending_model_change(),
