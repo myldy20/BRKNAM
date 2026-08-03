@@ -7,13 +7,14 @@ option(BRKNAM_BUILD_TESTS "Build BRKNAM tests" ON)
 option(BRKNAM_USE_SYSTEM_SQLITE "Use a system SQLite library instead of the pinned amalgamation" OFF)
 option(BRKNAM_ENABLE_NAM_CORE "Build the pinned NeuralAmpModelerCore adapter" OFF)
 
+find_package(Threads REQUIRED)
+
 if(BRKNAM_USE_SYSTEM_SQLITE)
   find_package(SQLite3 REQUIRED)
   add_library(brknam_sqlite INTERFACE)
   target_link_libraries(brknam_sqlite INTERFACE SQLite::SQLite3)
 else()
   include(FetchContent)
-  find_package(Threads REQUIRED)
 
   FetchContent_Declare(
     brknam_sqlite_source
@@ -46,6 +47,7 @@ endif()
 add_library(BRKNAM::sqlite ALIAS brknam_sqlite)
 
 add_library(brknam_core
+  src/audio/ModelLoadWorker.cpp
   src/audio/OneSlotProcessor.cpp
   src/audio/RealtimeModelSlot.cpp
   src/library/LibraryDatabase.cpp
@@ -65,7 +67,7 @@ target_include_directories(brknam_core
 )
 
 target_compile_features(brknam_core PUBLIC cxx_std_20)
-target_link_libraries(brknam_core PRIVATE BRKNAM::sqlite)
+target_link_libraries(brknam_core PRIVATE BRKNAM::sqlite Threads::Threads)
 
 if(MSVC)
   target_compile_options(brknam_core PRIVATE /W4 /permissive-)
@@ -76,7 +78,6 @@ endif()
 if(BRKNAM_ENABLE_NAM_CORE)
   include(cmake/DependencyPins.cmake)
   include(FetchContent)
-  find_package(Threads REQUIRED)
 
   FetchContent_Declare(
     brknam_nam_core_source
@@ -190,6 +191,12 @@ if(BRKNAM_BUILD_TESTS)
   target_link_libraries(brknam-audio-tests PRIVATE BRKNAM::core)
   target_compile_features(brknam-audio-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-audio-tests COMMAND brknam-audio-tests)
+
+  add_executable(brknam-model-loader-tests tests/ModelLoadWorkerTests.cpp)
+  target_link_libraries(brknam-model-loader-tests PRIVATE BRKNAM::core)
+  target_compile_features(brknam-model-loader-tests PRIVATE cxx_std_20)
+  add_test(NAME brknam-model-loader-tests COMMAND brknam-model-loader-tests)
+  set_tests_properties(brknam-model-loader-tests PROPERTIES TIMEOUT 20)
 
   if(BRKNAM_ENABLE_NAM_CORE)
     add_executable(brknam-nam-core-tests tests/NamCoreModelTests.cpp)

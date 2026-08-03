@@ -2,6 +2,7 @@
 // Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 // See NOTICE for the GPLv3 section 7(b) origin notice.
 
+#include "brknam/audio/ModelLoadWorker.hpp"
 #include "brknam/audio/NamCoreModel.hpp"
 
 #include <array>
@@ -14,6 +15,8 @@
 #include <string>
 
 namespace {
+
+using namespace std::chrono_literals;
 
 void require(const bool condition, const std::string& message) {
   if (!condition) {
@@ -161,6 +164,55 @@ void test_unprepared_process_clears_output() {
           "unprepared adapter must fail silent");
 }
 
+void test_end_to_end_worker_core_and_audio_path() {
+  TempDirectory temp;
+  const auto path = temp.path / "linear.nam";
+  write_text(path, linear_fixture());
+
+  constexpr std::size_t crossfade_frames = 960;
+  brknam::audio::OneSlotProcessor processor;
+  processor.prepare(48000.0, crossfade_frames);
+  brknam::audio::ModelLoadWorker worker(
+      processor, 48000.0, crossfade_frames,
+      [](const std::filesystem::path& requested) {
+        return brknam::audio::NamCoreModel::load(requested);
+      });
+
+  const auto generation = worker.request_model(path);
+  require(worker.wait_until_settled(generation, 5s),
+          "real Core load should settle on worker thread");
+  const auto status = worker.status();
+  require(status.state == brknam::audio::ModelLoadState::published,
+          "real Core model should publish through worker");
+
+  std::array<float, crossfade_frames> transition_input{};
+  std::array<float, crossfade_frames> transition_output{};
+  for (std::size_t index = 0; index < transition_input.size(); ++index) {
+    transition_input[index] = index % 2 == 0 ? 0.25F : -0.25F;
+  }
+  const float* transition_inputs[]{transition_input.data()};
+  float* transition_outputs[]{transition_output.data()};
+  require(processor.process(transition_inputs, 1, transition_outputs, 1,
+                            transition_input.size()) ==
+              brknam::audio::ProcessStatus::ok,
+          "audio block should accept worker-published Core model");
+  require(!processor.model_crossfade_active(),
+          "one 20 ms block should finish Core model transition");
+
+  processor.reset();
+  std::array<float, 4> input{0.25F, -0.25F, 0.25F, -0.25F};
+  std::array<float, 4> output{};
+  const float* inputs[]{input.data()};
+  float* outputs[]{output.data()};
+  require(processor.process(inputs, 1, outputs, 1, input.size()) ==
+              brknam::audio::ProcessStatus::ok,
+          "settled Core model should process through OneSlotProcessor");
+  require_near(output[0], 0.5F, 0.01F,
+               "end-to-end path should apply real Core model gain");
+  require_near(output[1], -0.5F, 0.01F,
+               "end-to-end path should preserve alternating polarity");
+}
+
 }  // namespace
 
 int main() {
@@ -169,6 +221,7 @@ int main() {
     test_sample_rate_mismatch_is_explicit();
     test_multichannel_model_is_rejected();
     test_unprepared_process_clears_output();
+    test_end_to_end_worker_core_and_audio_path();
     std::cout << "NamCoreModelTests passed\n";
     return 0;
   } catch (const std::exception& error) {

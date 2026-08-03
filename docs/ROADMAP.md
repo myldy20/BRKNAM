@@ -48,7 +48,7 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Implement the framework-neutral processor wrapper.
 - [x] Add input/output trim, bypass, normalization, post-model DC blocker, and model information.
 - [x] Build and execute real `.nam` fixtures through the pinned Core on Linux, macOS, and Windows.
-- [ ] Add a coalescing worker that loads and prepares requested model paths outside the audio thread.
+- [x] Add a coalescing worker that loads and prepares requested model paths outside the audio thread.
 - [x] Publish prepared models at block boundaries.
 - [x] Implement bounded deferred graph destruction and a 20 ms click-free crossfade.
 - [x] Report the maximum active latency while crossfading and the settled model latency afterwards.
