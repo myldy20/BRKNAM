@@ -106,8 +106,7 @@ if(BRKNAM_ENABLE_NAM_CORE)
   add_library(BRKNAM::nam_core ALIAS brknam_nam_core)
   target_compile_features(brknam_nam_core PUBLIC cxx_std_20)
   target_compile_definitions(brknam_nam_core
-    PUBLIC NAM_SAMPLE_FLOAT
-    PRIVATE NAM_ENABLE_A2_FAST
+    PUBLIC NAM_SAMPLE_FLOAT NAM_ENABLE_A2_FAST
   )
   target_include_directories(brknam_nam_core
     PUBLIC
@@ -204,6 +203,22 @@ if(BRKNAM_BUILD_TESTS)
     target_compile_features(brknam-nam-core-tests PRIVATE cxx_std_20)
     add_test(NAME brknam-nam-core-tests COMMAND brknam-nam-core-tests)
     set_tests_properties(brknam-nam-core-tests PROPERTIES LABELS nam-core)
+
+    add_executable(brknam-architecture-reference-tests
+      tests/NamArchitectureReferenceTests.cpp
+    )
+    target_link_libraries(brknam-architecture-reference-tests PRIVATE
+      BRKNAM::nam_adapter
+      BRKNAM::nam_core
+    )
+    target_compile_features(brknam-architecture-reference-tests PRIVATE cxx_std_20)
+    add_test(NAME brknam-architecture-reference-tests
+      COMMAND brknam-architecture-reference-tests
+    )
+    set_tests_properties(brknam-architecture-reference-tests PROPERTIES
+      LABELS nam-core
+      TIMEOUT 120
+    )
   endif()
 
   add_executable(brknam-library-benchmark tests/LibrarySearchBenchmark.cpp)
