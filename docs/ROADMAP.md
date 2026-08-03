@@ -40,7 +40,7 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 
 ## E2 — One-slot NAM player
 
-**Status: in progress.**
+**Status: automated validation complete; manual alpha testing in progress.**
 
 **Goal:** load and process one NAM model safely in real time.
 
@@ -55,9 +55,12 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Add model-rate resampling and include its latency in the reported total.
 - [x] Add representative A1/A2 reference-vector and sample-rate tests.
 - [x] Create initial iPlug2 VST3, AU, and standalone targets.
-- [ ] Run plugin validation and repeated model-switch stress tests in real hosts.
+- [x] Pass Steinberg VST3 Validator and Apple `auval` in CI.
+- [x] Pass repeated concurrent model-switch stress tests on Linux, macOS, and Windows.
+- [x] Produce unsigned macOS universal and Windows x64 alpha packages with checksums and installation instructions.
+- [ ] Complete standalone and Ableton Live smoke tests on user hardware with real local NAM collections.
 
-**Exit:** plugin validation passes; repeated model switching under audio load produces no crash, blocking call, or discontinuity above the defined threshold.
+**Exit:** automated validators pass; repeated model switching under audio load produces no crash, blocking call, or discontinuity above the defined threshold; the packaged standalone and DAW plug-ins pass the manual alpha checklist.
 
 ## E3 — IR and session-safe presets
 
