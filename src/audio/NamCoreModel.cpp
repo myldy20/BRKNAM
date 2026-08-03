@@ -5,7 +5,12 @@
 #include "brknam/audio/NamCoreModel.hpp"
 
 #include <NAM/activations.h>
+#include <NAM/container.h>
+#include <NAM/convnet.h>
 #include <NAM/get_dsp.h>
+#include <NAM/linear.h>
+#include <NAM/lstm.h>
+#include <NAM/wavenet/model.h>
 
 #include <algorithm>
 #include <cmath>
@@ -24,6 +29,28 @@ void enable_fast_tanh_once() {
   std::call_once(once, [] {
     nam::activations::Activation::enable_fast_tanh();
   });
+}
+
+// NeuralAmpModelerCore registers architecture parsers from static initializers
+// located in separate translation units. When Core is linked as a static
+// library, an optimizing linker may otherwise discard those translation units
+// because get_dsp() reaches them only through the registry. These observable
+// volatile references create explicit symbol dependencies without invoking the
+// parsers, so all official architectures and their registration objects remain
+// in the final binary.
+void retain_architecture_registrations() noexcept {
+  using Parser = std::unique_ptr<nam::ModelConfig> (*)(
+      const nlohmann::json&, double);
+  volatile Parser container_parser = &nam::container::create_config;
+  volatile Parser convnet_parser = &nam::convnet::create_config;
+  volatile Parser linear_parser = &nam::linear::create_config;
+  volatile Parser lstm_parser = &nam::lstm::create_config;
+  volatile Parser wavenet_parser = &nam::wavenet::create_config;
+  static_cast<void>(container_parser);
+  static_cast<void>(convnet_parser);
+  static_cast<void>(linear_parser);
+  static_cast<void>(lstm_parser);
+  static_cast<void>(wavenet_parser);
 }
 
 [[nodiscard]] ModelInfo read_info(nam::DSP& dsp) noexcept {
@@ -54,6 +81,7 @@ struct NamCoreModel::Impl {
 std::unique_ptr<NamCoreModel> NamCoreModel::load(
     const std::filesystem::path& model_path) {
   enable_fast_tanh_once();
+  retain_architecture_registrations();
 
   nam::DspLoadOptions options;
   options.prewarm = false;
