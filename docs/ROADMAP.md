@@ -52,7 +52,7 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 - [x] Publish prepared models at block boundaries.
 - [x] Implement bounded deferred graph destruction and a 20 ms click-free crossfade.
 - [x] Report the maximum active latency while crossfading and the settled model latency afterwards.
-- [ ] Add model-rate resampling and include its latency in the reported total.
+- [x] Add model-rate resampling and include its latency in the reported total.
 - [ ] Add representative A1/A2 reference-vector and sample-rate tests.
 - [ ] Create initial iPlug2 VST3, AU, and standalone targets.
 
