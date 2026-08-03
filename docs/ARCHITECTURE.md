@@ -22,7 +22,7 @@ tests/                 Unit, integration, DSP, and state compatibility tests
 docs/                  Product, architecture, roadmap, and decisions
 ```
 
-The current bootstrap implements `src/library` and `brknam-scan` first. This provides a testable vertical slice before adding large audio dependencies.
+E1 implements the filesystem scanner, bounded NAM metadata reader, SQLite library database, FTS5 search, incremental rescan, missing-file tracking, and user metadata. These remain independent of iPlug2 and the future audio processor.
 
 ## Component boundaries
 
@@ -34,10 +34,22 @@ Responsibilities:
 - parse NAM JSON metadata without loading model weights into the DSP engine;
 - maintain an application-owned SQLite database with FTS5 search;
 - retain original file locations rather than silently copying user libraries;
-- store optional SHA-256 hashes, file size, modification time, user tags, rating, favorite state, and provider identifiers;
+- store optional SHA-256 hashes, file size, modification time, user tags, rating, favorite state, recent use, and provider identifiers;
 - perform incremental rescans and explicitly report unreadable or malformed assets.
 
-The content hash is calculated lazily. Normal rescans first compare path, size, and modification time to avoid hashing an entire large library repeatedly.
+The database is accessed through `brknam::library::LibraryDatabase`; SQLite types do not appear in the public header. Schema changes use `PRAGMA user_version` and forward-only migrations. Schema version 1 contains:
+
+- named library roots and scan generations;
+- indexed NAM/IR assets and extracted metadata;
+- missing and parse-status state;
+- favorites, ratings, recent use, tags, and searchable tag text;
+- an FTS5 index synchronized by database triggers.
+
+Normal rescans compare root-relative path, kind, file size, and modification ticks. Unchanged files are marked as seen without reparsing. Deleted or moved paths remain in the database as missing so presets and future hash-based recovery can explain what happened instead of silently forgetting an asset.
+
+The content hash is calculated lazily in a later E1 increment. Normal rescans will continue to avoid hashing an entire large library repeatedly.
+
+SQLite 3.53.4 is pinned as a CMake-fetched amalgamation for deterministic builds. Developers may explicitly select a compatible system SQLite. FTS5 is mandatory; runtime extension loading is disabled in the bundled build.
 
 ### Audio engine
 
@@ -116,7 +128,7 @@ Primary views:
 - audition controls;
 - preset and A/B controls;
 - settings;
-- About/Legal view containing required licensing and author notices.
+- About/Legal view containing required licensing and origin notices.
 
 No embedded browser is required for the normal interface. A system browser may be opened for OAuth consent.
 
@@ -148,11 +160,12 @@ Queues are bounded. Overflow behavior is explicit: repeated navigation commands 
 - Versions are pinned and listed in `THIRD_PARTY.md` before release.
 - Network, database, and plugin-framework types must not leak into the DSP core public API.
 - Optional providers compile behind feature flags.
-- The first CI gate compiles and tests the dependency-free core on Linux, macOS, and Windows.
+- The default build uses pinned sources; system dependencies require an explicit configure option.
 
 ## Testing strategy
 
 - unit tests for scanning, metadata, search parsing, state migration, and path/hash restore;
+- deterministic fixture tests for inserted, changed, unchanged, malformed, and missing assets;
 - golden tests for preset serialization;
 - DSP impulse and reference-vector tests against known upstream behavior;
 - realtime-safety tests that detect allocation and locking in the audio callback;

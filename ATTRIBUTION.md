@@ -1,13 +1,9 @@
-# BRKNAM attribution term
+# BRKNAM attribution
 
-Copyright (C) 2026 Ilya Tolstoukhov (`@myldy20`).
+BRKNAM is Copyright © 2026 Myldy design / @myldy20.
 
-BRKNAM is licensed under the GNU General Public License, version 3 or any later version.
+The canonical GPLv3 section 7(b) origin notice is defined in [`NOTICE`](NOTICE):
 
-Under GNU GPLv3 section 7(b), distributions of BRKNAM and works based on BRKNAM that provide an interactive user interface must preserve the following reasonable author attribution in an **About**, **Legal**, or equivalent readily accessible view:
+> Based on BRKNAM by Myldy design — https://github.com/myldy20/BRKNAM
 
-> BRKNAM — originally created by Ilya Tolstoukhov (@myldy20).
-
-Source distributions must preserve the copyright and license notices in the source files and documentation.
-
-This term does not require advertising credit, endorsement language, use of the original branding for modified versions, or attribution in audio produced with the software. Modified versions may use a different name and visual identity, provided that the legal author notice above remains accessible.
+Redistributed modified versions must preserve that notice in their source distribution and in an About, Credits, documentation, or other normally visible attribution location when one exists. This does not require advertising credit, unchanged branding, or attribution in audio produced with the software.

@@ -8,7 +8,9 @@ BRKNAM is a local-first tool for finding, auditioning, organizing, and playing N
 
 ## Status
 
-Early development. The first vertical slice is a dependency-free C++20 library scanner plus the `brknam-scan` command-line tool. Audio processing and plugin targets are planned next.
+Early development. The current E1 foundation can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+
+Audio processing and plugin targets begin in E2 after the local-library contract is stable.
 
 ## Product principles
 
@@ -21,16 +23,30 @@ Early development. The first vertical slice is a dependency-free C++20 library s
 
 ## Current build
 
-Requirements: CMake 3.24+ and a C++20 compiler.
+Requirements: CMake 3.24+, a C++20 compiler, and internet access during the first default configure so CMake can download the pinned SQLite amalgamation. A compatible system SQLite can be selected explicitly.
 
 ```sh
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
-./build/brknam-scan /path/to/your/NAM/library
+```
+
+Use a system SQLite installation instead:
+
+```sh
+cmake -S . -B build -DBRKNAM_USE_SYSTEM_SQLITE=ON
 ```
 
 On multi-config generators, add `--config Release` when building and `-C Release` when testing.
+
+### Current tools
+
+```sh
+./build/brknam-scan /path/to/your/NAM/library
+./build/brknam-inspect /path/to/model.nam
+./build/brknam-library library.sqlite3 index /path/to/your/NAM/library
+./build/brknam-library library.sqlite3 search "5150 crunch"
+```
 
 ## Planned targets
 
@@ -42,6 +58,6 @@ See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), and [p
 
 ## Licensing
 
-BRKNAM is licensed under **GNU GPL v3 or later**. Copyright and author notices must be preserved. Interactive distributions must retain the reasonable author attribution described in [ATTRIBUTION.md](ATTRIBUTION.md).
+BRKNAM is licensed under **GNU GPL v3 or later**. Copyright and origin notices must be preserved as described in [`NOTICE`](NOTICE).
 
-Copyright (C) 2026 Ilya Tolstoukhov ([@myldy20](https://github.com/myldy20)).
+Copyright © 2026 [Myldy design](https://github.com/myldy20) / [@myldy20](https://github.com/myldy20).
