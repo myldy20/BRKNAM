@@ -1,6 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 
+# A source checkout of iPlug2 intentionally omits the Steinberg SDK. Populate
+# the exact directory expected by iPlug2's VST3.cmake from the official pinned
+# aggregate repository, including its official component submodules.
+include(FetchContent)
+set(BRKNAM_VST3_SDK_SOURCE_DIR
+    "${IPLUG2_DIR}/Dependencies/IPlug/VST3_SDK")
+FetchContent_Declare(
+  brknam_vst3_sdk_source
+  GIT_REPOSITORY ${BRKNAM_VST3_SDK_REPOSITORY}
+  GIT_TAG ${BRKNAM_VST3_SDK_COMMIT}
+  GIT_SHALLOW FALSE
+  GIT_PROGRESS TRUE
+  GIT_SUBMODULES_RECURSE TRUE
+  SOURCE_DIR ${BRKNAM_VST3_SDK_SOURCE_DIR}
+  SOURCE_SUBDIR brknam-no-cmake-project
+)
+FetchContent_MakeAvailable(brknam_vst3_sdk_source)
+
 iplug_add_plugin(BRKNAM
   SOURCES
     BRKNAM.cpp
