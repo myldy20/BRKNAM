@@ -47,3 +47,29 @@ jobs:
         run: >-
           ctest --test-dir build-nam -C Release
           --output-on-failure -L nam-core
+
+  iplug2-shell-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            targets: BRKNAM-app BRKNAM-vst3 BRKNAM-au
+          - os: windows-latest
+            targets: BRKNAM-app BRKNAM-vst3
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure iPlug2 shell
+        run: >-
+          cmake -S . -B build-plugin
+          -DBRKNAM_ENABLE_IPLUG2=ON
+          -DBRKNAM_BUILD_TESTS=OFF
+          -DBRKNAM_BUILD_TOOLS=OFF
+          -DIPLUG_DEPLOY_PLUGINS=OFF
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build iPlug2 shell
+        run: >-
+          cmake --build build-plugin --config Release
+          --target ${{ matrix.targets }}
