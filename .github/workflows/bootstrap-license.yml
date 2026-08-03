@@ -1,0 +1,26 @@
+name: Bootstrap GPL license
+
+on:
+  push:
+    branches: [agent/bootstrap-architecture]
+
+permissions:
+  contents: write
+
+jobs:
+  add-license:
+    if: ${{ !contains(github.event.head_commit.message, '[license-bootstrap]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-architecture
+      - name: Add canonical GPLv3 text
+        run: |
+          curl --fail --location --silent --show-error https://www.gnu.org/licenses/gpl-3.0.txt --output LICENSE
+          rm .github/workflows/bootstrap-license.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add LICENSE .github/workflows/bootstrap-license.yml
+          git commit -m "Add GPLv3 license [license-bootstrap]"
+          git push
