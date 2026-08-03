@@ -7,7 +7,7 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 **Goal:** establish a buildable, legally clear, testable project.
 
 - [x] Product definition and architecture.
-- [x] GNU GPL v3-or-later license and GPLv3 section 7(b) author notice.
+- [x] GNU GPL v3-or-later license and GPLv3 section 7(b) origin notice.
 - [x] CMake C++20 core.
 - [x] Cross-platform CI for Linux, macOS, and Windows.
 - [x] Initial recursive local asset scanner.
@@ -20,14 +20,17 @@ The roadmap is organized as gated vertical slices. A stage is complete only when
 
 **Goal:** turn arbitrary folders into a reliable searchable catalog.
 
-- Parse NAM file version, architecture, sample rate, metadata, creator, gear and license fields.
-- Reject malformed or unsupported files without crashing or blocking the rest of the scan.
-- Add SQLite schema migrations and FTS5 search.
-- Add multiple library roots, incremental scan, missing-file tracking, and manual rescan.
-- Add lazy SHA-256 hashing and duplicate grouping.
-- Add favorites, ratings, user tags, recent models, and saved searches.
-- Expose a library service independent of the eventual UI framework.
-- Extend `brknam-scan` with machine-readable JSON output and diagnostics.
+- [x] Parse NAM file version, architecture, sample rate, creator, gear, tone and calibration metadata without loading model weights.
+- [x] Reject malformed or unsupported files without crashing or blocking the rest of the scan.
+- [x] Add a versioned SQLite schema and FTS5 search.
+- [x] Add multiple library roots, incremental scan, missing-file tracking, and manual CLI rescan.
+- [ ] Add lazy SHA-256 hashing, duplicate grouping, and moved-file recovery.
+- [x] Add favorites, ratings, user tags, and recent models.
+- [ ] Add saved searches.
+- [x] Expose a library service independent of the eventual UI framework.
+- [ ] Extend command-line diagnostics with stable machine-readable JSON output.
+- [ ] Add a 25,000-record benchmark and explicit interactive-search threshold.
+- [ ] Add migration fixtures for every schema version after schema version 1.
 
 **Exit:** 25,000 synthetic records search interactively; fixture libraries rescan deterministically; schema migration tests pass.
 
