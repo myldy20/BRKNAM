@@ -148,19 +148,30 @@ BRKNAM::~BRKNAM() = default;
 #if IPLUG_DSP
 void BRKNAM::ProcessBlock(sample** inputs, sample** outputs,
                           const int nFrames) {
-  const auto input_channels = std::clamp(NInChansConnected(), 1, 2);
-  const auto output_channels = std::clamp(NOutChansConnected(), 1, 2);
-  if (inputs == nullptr || outputs == nullptr || nFrames < 0) {
+  const auto connected_inputs = NInChansConnected();
+  const auto connected_outputs = NOutChansConnected();
+  const auto output_channels = std::clamp(connected_outputs, 0, 2);
+  if (outputs == nullptr || nFrames <= 0 || connected_inputs <= 0 ||
+      connected_outputs <= 0 || inputs == nullptr) {
     clear_host_outputs(outputs, output_channels, std::max(0, nFrames));
     return;
   }
 
+  const auto input_channels = std::clamp(connected_inputs, 1, 2);
   std::array<const float*, 2> core_inputs{};
   std::array<float*, 2> core_outputs{};
   for (int channel = 0; channel < input_channels; ++channel) {
+    if (inputs[channel] == nullptr) {
+      clear_host_outputs(outputs, output_channels, nFrames);
+      return;
+    }
     core_inputs[static_cast<std::size_t>(channel)] = inputs[channel];
   }
   for (int channel = 0; channel < output_channels; ++channel) {
+    if (outputs[channel] == nullptr) {
+      clear_host_outputs(outputs, output_channels, nFrames);
+      return;
+    }
     core_outputs[static_cast<std::size_t>(channel)] = outputs[channel];
   }
 
