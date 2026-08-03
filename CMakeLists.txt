@@ -229,6 +229,22 @@ if(BRKNAM_BUILD_TESTS)
   target_compile_features(brknam-audio-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-audio-tests COMMAND brknam-audio-tests)
 
+  add_executable(brknam-realtime-switch-stress-tests
+    tests/RealtimeSwitchStressTests.cpp
+  )
+  target_link_libraries(brknam-realtime-switch-stress-tests PRIVATE
+    BRKNAM::core
+    Threads::Threads
+  )
+  target_compile_features(brknam-realtime-switch-stress-tests PRIVATE cxx_std_20)
+  add_test(NAME brknam-realtime-switch-stress-tests
+    COMMAND brknam-realtime-switch-stress-tests
+  )
+  set_tests_properties(brknam-realtime-switch-stress-tests PROPERTIES
+    LABELS realtime
+    TIMEOUT 30
+  )
+
   add_executable(brknam-model-loader-tests tests/ModelLoadWorkerTests.cpp)
   target_link_libraries(brknam-model-loader-tests PRIVATE BRKNAM::core)
   target_compile_features(brknam-model-loader-tests PRIVATE cxx_std_20)
