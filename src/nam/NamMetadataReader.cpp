@@ -1,18 +1,133 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Ilya Tolstoukhov (@myldy20)
-// See ATTRIBUTION.md for the GPLv3 section 7(b) attribution term.
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
+// See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #include "brknam/nam/NamMetadataReader.hpp"
 
-#include <charconv>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <istream>
 #include <string_view>
-#include <system_error>
 
 namespace brknam::nam {
 namespace {
+
+[[nodiscard]] bool parse_decimal_token(const std::string_view token,
+                                       double& output) noexcept {
+  if (token.empty()) {
+    return false;
+  }
+
+  std::size_t index = 0;
+  bool negative = false;
+  if (token[index] == '-') {
+    negative = true;
+    ++index;
+  }
+  if (index >= token.size()) {
+    return false;
+  }
+
+  const auto exponent_offset = token.find_first_of("eE", index);
+  const auto significand_end =
+      exponent_offset == std::string_view::npos ? token.size() : exponent_offset;
+  auto decimal_offset = token.find('.', index);
+  if (decimal_offset == std::string_view::npos || decimal_offset >= significand_end) {
+    decimal_offset = significand_end;
+  }
+
+  const std::size_t fraction_digits =
+      decimal_offset < significand_end ? significand_end - decimal_offset - 1U : 0U;
+  if (fraction_digits > 100000U) {
+    return false;
+  }
+
+  std::int64_t explicit_exponent = 0;
+  if (exponent_offset != std::string_view::npos) {
+    std::size_t exponent_index = exponent_offset + 1U;
+    bool exponent_negative = false;
+    if (exponent_index < token.size() &&
+        (token[exponent_index] == '+' || token[exponent_index] == '-')) {
+      exponent_negative = token[exponent_index] == '-';
+      ++exponent_index;
+    }
+    if (exponent_index >= token.size()) {
+      return false;
+    }
+    for (; exponent_index < token.size(); ++exponent_index) {
+      const char character = token[exponent_index];
+      if (character < '0' || character > '9') {
+        return false;
+      }
+      explicit_exponent = explicit_exponent * 10 + (character - '0');
+      if (explicit_exponent > 100000) {
+        return false;
+      }
+    }
+    if (exponent_negative) {
+      explicit_exponent = -explicit_exponent;
+    }
+  }
+
+  constexpr std::size_t kStoredDigits = 19;
+  std::uint64_t mantissa = 0;
+  std::size_t stored_digits = 0;
+  std::size_t significant_digits = 0;
+  bool found_nonzero = false;
+
+  for (; index < significand_end; ++index) {
+    const char character = token[index];
+    if (character == '.') {
+      continue;
+    }
+    if (character < '0' || character > '9') {
+      return false;
+    }
+
+    const auto digit = static_cast<unsigned int>(character - '0');
+    if (!found_nonzero && digit == 0U) {
+      continue;
+    }
+    found_nonzero = true;
+    ++significant_digits;
+    if (significant_digits > 100000U) {
+      return false;
+    }
+    if (stored_digits < kStoredDigits) {
+      mantissa = mantissa * 10U + digit;
+      ++stored_digits;
+    }
+  }
+
+  if (!found_nonzero) {
+    output = negative ? -0.0 : 0.0;
+    return true;
+  }
+
+  const auto ignored_digits = significant_digits - stored_digits;
+  const auto decimal_exponent =
+      explicit_exponent - static_cast<std::int64_t>(fraction_digits) +
+      static_cast<std::int64_t>(ignored_digits);
+  if (decimal_exponent < -10000 || decimal_exponent > 10000) {
+    return false;
+  }
+
+  long double scaled = static_cast<long double>(mantissa);
+  if (decimal_exponent != 0) {
+    scaled *= std::pow(10.0L, static_cast<long double>(decimal_exponent));
+  }
+  if (negative) {
+    scaled = -scaled;
+  }
+
+  const double candidate = static_cast<double>(scaled);
+  if (!std::isfinite(candidate) || candidate == 0.0) {
+    return false;
+  }
+  output = candidate;
+  return true;
+}
 
 class JsonProbe {
  public:
@@ -454,10 +569,7 @@ class JsonProbe {
       }
     }
 
-    const auto begin = token.data();
-    const auto end = token.data() + token.size();
-    const auto result = std::from_chars(begin, end, output, std::chars_format::general);
-    if (result.ec != std::errc{} || result.ptr != end) {
+    if (!parse_decimal_token(token, output)) {
       set_error(NamReadErrorCode::malformed_json, "Unable to parse JSON number");
       return false;
     }
