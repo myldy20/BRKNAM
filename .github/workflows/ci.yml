@@ -48,7 +48,7 @@ jobs:
           ctest --test-dir build-nam -C Release
           --output-on-failure -L nam-core
 
-  iplug2-shell-build:
+  iplug2-shell-build-and-validate:
     strategy:
       fail-fast: false
       matrix:
@@ -73,3 +73,49 @@ jobs:
         run: >-
           cmake --build build-plugin --config Release
           --target ${{ matrix.targets }}
+      - name: Configure Steinberg validator
+        run: >-
+          cmake
+          -S build-plugin/_deps/brknam_iplug2_source-src/Dependencies/IPlug/VST3_SDK
+          -B build-validator
+          -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF
+          -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=ON
+          -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build Steinberg validator
+        run: cmake --build build-validator --config Release --target validator
+      - name: Validate VST3 on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          validator="$(find build-validator -type f -name validator -perm -111 -print -quit)"
+          plugin="$(find build-plugin/out -type d -name BRKNAM.vst3 -print -quit)"
+          test -n "$validator"
+          test -n "$plugin"
+          "$validator" "$plugin"
+      - name: Validate VST3 on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $validator = Get-ChildItem build-validator -Recurse -File -Filter validator.exe | Select-Object -First 1
+          $plugin = Get-ChildItem build-plugin/out -Recurse -Directory -Filter BRKNAM.vst3 | Select-Object -First 1
+          if (-not $validator) { throw "Steinberg validator.exe was not built" }
+          if (-not $plugin) { throw "BRKNAM.vst3 bundle was not built" }
+          & $validator.FullName $plugin.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate Audio Unit on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          component="$(find build-plugin/out -type d -name BRKNAM.component -print -quit)"
+          test -n "$component"
+          codesign --force --deep --sign - "$component"
+          destination="$HOME/Library/Audio/Plug-Ins/Components/BRKNAM.component"
+          mkdir -p "$(dirname "$destination")"
+          rm -rf "$destination"
+          cp -R "$component" "$destination"
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 2
+          auval -v aufx BrNm Myld
