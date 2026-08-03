@@ -80,6 +80,13 @@ struct SearchOptions {
   bool include_missing{false};
 };
 
+struct SavedSearchRecord {
+  std::int64_t id{};
+  std::string name;
+  std::string query;
+  SearchOptions options;
+};
+
 class LibraryDatabase final {
  public:
   explicit LibraryDatabase(const std::filesystem::path& database_path);
@@ -106,6 +113,15 @@ class LibraryDatabase final {
       const SearchOptions& options = {}) const;
   [[nodiscard]] std::optional<AssetRecord> asset(std::int64_t asset_id) const;
   [[nodiscard]] std::vector<AssetRecord> recent(std::size_t limit = 20) const;
+
+  [[nodiscard]] SavedSearchRecord save_search(
+      std::string name,
+      std::string query,
+      const SearchOptions& options = {});
+  [[nodiscard]] std::vector<SavedSearchRecord> saved_searches() const;
+  [[nodiscard]] std::vector<AssetRecord> run_saved_search(
+      std::int64_t saved_search_id) const;
+  void remove_saved_search(std::int64_t saved_search_id);
 
   [[nodiscard]] std::string ensure_sha256(std::int64_t asset_id);
   [[nodiscard]] std::vector<AssetRecord> duplicate_group(std::int64_t asset_id);

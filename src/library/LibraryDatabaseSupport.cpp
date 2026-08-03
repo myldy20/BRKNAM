@@ -104,7 +104,23 @@ void check_result(sqlite3* database, const int result,
   }
 }
 
-void create_schema_v2(sqlite3* database) {
+void create_saved_searches_table(sqlite3* database) {
+  exec(database, R"SQL(
+    CREATE TABLE saved_searches (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      query TEXT NOT NULL,
+      include_missing INTEGER NOT NULL DEFAULT 0
+        CHECK(include_missing IN (0, 1)),
+      result_limit INTEGER NOT NULL DEFAULT 100
+        CHECK(result_limit BETWEEN 1 AND 1000),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  )SQL");
+}
+
+void create_schema_v3(sqlite3* database) {
   exec(database, R"SQL(
     CREATE TABLE library_roots (
       id INTEGER PRIMARY KEY,
@@ -199,9 +215,9 @@ void create_schema_v2(sqlite3* database) {
       tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY(asset_id, tag_id)
     );
-
-    PRAGMA user_version = 2;
   )SQL");
+  create_saved_searches_table(database);
+  exec(database, "PRAGMA user_version = 3");
 }
 
 }  // namespace
@@ -448,7 +464,7 @@ void LibraryDatabase::Impl::migrate() {
 
   if (version == 0) {
     Transaction transaction(database);
-    detail::create_schema_v2(database);
+    detail::create_schema_v3(database);
     transaction.commit();
     return;
   }
@@ -462,6 +478,14 @@ void LibraryDatabase::Impl::migrate() {
         WHERE content_sha256 IS NOT NULL;
       PRAGMA user_version = 2;
     )SQL");
+    transaction.commit();
+    version = 2;
+  }
+
+  if (version == 2) {
+    Transaction transaction(database);
+    detail::create_saved_searches_table(database);
+    exec(database, "PRAGMA user_version = 3");
     transaction.commit();
     return;
   }

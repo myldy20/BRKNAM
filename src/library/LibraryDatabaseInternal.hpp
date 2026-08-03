@@ -16,7 +16,7 @@
 
 namespace brknam::library::detail {
 
-constexpr int kCurrentSchemaVersion = 2;
+constexpr int kCurrentSchemaVersion = 3;
 
 [[nodiscard]] std::string path_to_utf8(const std::filesystem::path& path);
 [[nodiscard]] std::filesystem::path path_from_utf8(std::string_view value);

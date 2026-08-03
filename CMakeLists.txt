@@ -47,6 +47,7 @@ add_library(BRKNAM::sqlite ALIAS brknam_sqlite)
 add_library(brknam_core
   src/library/LibraryDatabase.cpp
   src/library/LibraryDatabaseRefresh.cpp
+  src/library/LibraryDatabaseSavedSearches.cpp
   src/library/LibraryDatabaseSupport.cpp
   src/library/LibraryScanner.cpp
   src/library/Sha256.cpp
@@ -101,4 +102,18 @@ if(BRKNAM_BUILD_TESTS)
   target_link_libraries(brknam-library-tests PRIVATE BRKNAM::core BRKNAM::sqlite)
   target_compile_features(brknam-library-tests PRIVATE cxx_std_20)
   add_test(NAME brknam-library-tests COMMAND brknam-library-tests)
+
+  add_executable(brknam-json-tests tests/JsonOutputTests.cpp)
+  target_link_libraries(brknam-json-tests PRIVATE BRKNAM::core)
+  target_compile_features(brknam-json-tests PRIVATE cxx_std_20)
+  add_test(NAME brknam-json-tests COMMAND brknam-json-tests)
+
+  add_executable(brknam-library-benchmark tests/LibrarySearchBenchmark.cpp)
+  target_link_libraries(brknam-library-benchmark PRIVATE BRKNAM::core BRKNAM::sqlite)
+  target_compile_features(brknam-library-benchmark PRIVATE cxx_std_20)
+  add_test(NAME brknam-library-benchmark COMMAND brknam-library-benchmark)
+  set_tests_properties(brknam-library-benchmark PROPERTIES
+    LABELS performance
+    TIMEOUT 90
+  )
 endif()

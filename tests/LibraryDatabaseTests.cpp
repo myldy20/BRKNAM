@@ -48,6 +48,18 @@ struct TempDirectory {
   }
 };
 
+void exec_sql(sqlite3* database, const std::string& sql) {
+  char* message = nullptr;
+  const int result =
+      sqlite3_exec(database, sql.c_str(), nullptr, nullptr, &message);
+  if (result != SQLITE_OK) {
+    const std::string error =
+        message != nullptr ? message : "unknown SQLite error";
+    sqlite3_free(message);
+    throw std::runtime_error(error);
+  }
+}
+
 void test_index_refresh_and_search() {
   TempDirectory temp;
   const auto models = temp.path / "Mødels";
@@ -59,7 +71,7 @@ void test_index_refresh_and_search() {
   write_file(ir, "RIFF");
 
   brknam::library::LibraryDatabase database(temp.path / "library.sqlite3");
-  require(database.schema_version() == 2, "schema version should be 2");
+  require(database.schema_version() == 3, "schema version should be 3");
   const auto root = database.add_or_update_root(models, "Fixtures");
   require(root.id > 0, "root id should be assigned");
 
@@ -140,6 +152,54 @@ void test_user_metadata_survives_refresh() {
     rejected = true;
   }
   require(rejected, "invalid rating should be rejected");
+}
+
+void test_saved_searches() {
+  TempDirectory temp;
+  const auto models = temp.path / "models";
+  write_file(models / "Lead.nam",
+             R"({"version":"0.5.4","architecture":"WaveNet","weights":[]})");
+
+  brknam::library::LibraryDatabase database(temp.path / "library.sqlite3");
+  const auto root = database.add_or_update_root(models);
+  static_cast<void>(database.refresh_root(root.id));
+
+  brknam::library::SearchOptions options;
+  options.limit = 7;
+  options.include_missing = true;
+  const auto created = database.save_search("My leads", "Lead", options);
+  require(created.id > 0, "saved search should receive an id");
+  require(created.options.limit == 7 && created.options.include_missing,
+          "saved search should persist its options");
+
+  const auto listed = database.saved_searches();
+  require(listed.size() == 1 && listed.front().id == created.id,
+          "saved search should be listed deterministically");
+  require(database.run_saved_search(created.id).size() == 1,
+          "saved search should execute through the normal search contract");
+
+  options.limit = 3;
+  options.include_missing = false;
+  const auto updated = database.save_search("my LEADS", "NoMatch", options);
+  require(updated.id == created.id,
+          "case-insensitive name update should preserve saved-search identity");
+  require(updated.query == "NoMatch" && updated.options.limit == 3 &&
+              !updated.options.include_missing,
+          "upsert should replace saved-search query and options");
+  require(database.run_saved_search(created.id).empty(),
+          "updated saved search should use its new query");
+
+  database.remove_saved_search(created.id);
+  require(database.saved_searches().empty(),
+          "saved search should be removable");
+
+  bool rejected = false;
+  try {
+    static_cast<void>(database.save_search("   ", "Lead"));
+  } catch (const brknam::library::LibraryDatabaseError&) {
+    rejected = true;
+  }
+  require(rejected, "blank saved-search names should be rejected");
 }
 
 void test_lazy_hash_and_duplicates() {
@@ -228,31 +288,49 @@ void test_move_recovery_preserves_identity() {
           "move recovery should preserve user metadata");
 }
 
-void test_schema_v1_migration() {
-  TempDirectory temp;
-  const auto path = temp.path / "legacy.sqlite3";
-
+void create_legacy_database(const std::filesystem::path& path,
+                            const int version) {
   sqlite3* raw = nullptr;
   require(sqlite3_open(path.string().c_str(), &raw) == SQLITE_OK,
           "legacy fixture database should open");
-  char* message = nullptr;
-  const int result = sqlite3_exec(
-      raw,
-      "CREATE TABLE assets(id INTEGER PRIMARY KEY);"
-      "PRAGMA user_version = 1;",
-      nullptr, nullptr, &message);
-  if (result != SQLITE_OK) {
-    const std::string error =
-        message != nullptr ? message : "unknown SQLite error";
-    sqlite3_free(message);
+  try {
+    if (version == 1) {
+      exec_sql(raw, "CREATE TABLE assets(id INTEGER PRIMARY KEY);"
+                    "PRAGMA user_version = 1;");
+    } else if (version == 2) {
+      exec_sql(raw,
+               "CREATE TABLE assets("
+               "id INTEGER PRIMARY KEY,"
+               "content_sha256 TEXT"
+               ");"
+               "PRAGMA user_version = 2;");
+    } else {
+      throw std::runtime_error("unsupported legacy fixture version");
+    }
     sqlite3_close(raw);
-    throw std::runtime_error(error);
+  } catch (...) {
+    sqlite3_close(raw);
+    throw;
   }
-  sqlite3_close(raw);
+}
 
-  brknam::library::LibraryDatabase database(path);
-  require(database.schema_version() == 2,
-          "schema version 1 should migrate to version 2");
+void test_schema_migrations() {
+  TempDirectory temp;
+  const auto v1_path = temp.path / "legacy-v1.sqlite3";
+  create_legacy_database(v1_path, 1);
+  brknam::library::LibraryDatabase v1(v1_path);
+  require(v1.schema_version() == 3,
+          "schema version 1 should migrate through version 2 to version 3");
+  require(v1.saved_searches().empty(),
+          "v1 migration should create the saved-search table");
+
+  const auto v2_path = temp.path / "legacy-v2.sqlite3";
+  create_legacy_database(v2_path, 2);
+  brknam::library::LibraryDatabase v2(v2_path);
+  require(v2.schema_version() == 3,
+          "schema version 2 should migrate to version 3");
+  require(v2.saved_searches().empty(),
+          "v2 migration should create the saved-search table");
 }
 
 }  // namespace
@@ -261,9 +339,10 @@ int main() {
   try {
     test_index_refresh_and_search();
     test_user_metadata_survives_refresh();
+    test_saved_searches();
     test_lazy_hash_and_duplicates();
     test_move_recovery_preserves_identity();
-    test_schema_v1_migration();
+    test_schema_migrations();
     std::cout << "LibraryDatabaseTests passed\n";
     return 0;
   } catch (const std::exception& error) {
