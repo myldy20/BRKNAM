@@ -11,6 +11,15 @@ option(BRKNAM_ENABLE_IPLUG2 "Build the iPlug2 APP, VST3 and AU shell" OFF)
 if(BRKNAM_ENABLE_IPLUG2)
   set(BRKNAM_ENABLE_NAM_CORE ON CACHE BOOL
       "Build the pinned NeuralAmpModelerCore adapter" FORCE)
+  if(MSVC)
+    # iPlug2's Windows APP/VST3 targets use the static MSVC runtime. All
+    # libraries that cross that link boundary must use the same CRT; mixing
+    # /MD BRKNAM archives with /MT iPlug2 objects causes LNK2038 and duplicate
+    # standard-library symbols.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING
+        "MSVC runtime used by the optional iPlug2 product build" FORCE)
+  endif()
 endif()
 
 find_package(Threads REQUIRED)
