@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2026 Myldy design / @myldy20
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 // See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #include "LibraryDatabaseInternal.hpp"
@@ -20,7 +20,8 @@ std::string path_to_utf8(const std::filesystem::path& path) {
 }
 
 std::filesystem::path path_from_utf8(const std::string_view value) {
-  const std::u8string utf8(reinterpret_cast<const char8_t*>(value.data()), value.size());
+  const std::u8string utf8(reinterpret_cast<const char8_t*>(value.data()),
+                           value.size());
   return std::filesystem::path(utf8);
 }
 
@@ -30,13 +31,9 @@ std::filesystem::path normalize_path(const std::filesystem::path& path) {
   if (!error) {
     return normalized;
   }
-
   error.clear();
   normalized = std::filesystem::absolute(path, error);
-  if (!error) {
-    return normalized.lexically_normal();
-  }
-  return path.lexically_normal();
+  return error ? path.lexically_normal() : normalized.lexically_normal();
 }
 
 std::int64_t modified_ticks(const std::filesystem::path& path) {
@@ -49,7 +46,8 @@ std::int64_t modified_ticks(const std::filesystem::path& path) {
   const auto ticks = time.time_since_epoch().count();
   if (ticks > std::numeric_limits<std::int64_t>::max() ||
       ticks < std::numeric_limits<std::int64_t>::min()) {
-    throw LibraryDatabaseError("Modification timestamp is outside SQLite integer range");
+    throw LibraryDatabaseError(
+        "Modification timestamp is outside SQLite integer range");
   }
   return static_cast<std::int64_t>(ticks);
 }
@@ -106,13 +104,113 @@ void check_result(sqlite3* database, const int result,
   }
 }
 
+void create_schema_v2(sqlite3* database) {
+  exec(database, R"SQL(
+    CREATE TABLE library_roots (
+      id INTEGER PRIMARY KEY,
+      path TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+      scan_generation INTEGER NOT NULL DEFAULT 0,
+      last_scan_started_at INTEGER,
+      last_scan_completed_at INTEGER
+    );
+
+    CREATE TABLE assets (
+      id INTEGER PRIMARY KEY,
+      root_id INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
+      path TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      kind INTEGER NOT NULL CHECK(kind IN (0, 1)),
+      size_bytes INTEGER NOT NULL,
+      modified_ticks INTEGER NOT NULL,
+      content_sha256 TEXT CHECK(content_sha256 IS NULL OR length(content_sha256) = 64),
+      seen_generation INTEGER NOT NULL DEFAULT 0,
+      missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0, 1)),
+      parse_status INTEGER NOT NULL DEFAULT 0 CHECK(parse_status IN (0, 1, 2)),
+      parse_error TEXT,
+      display_name TEXT NOT NULL,
+      file_version TEXT,
+      architecture TEXT,
+      sample_rate_hz REAL,
+      modeled_by TEXT,
+      gear_make TEXT,
+      gear_model TEXT,
+      gear_type TEXT,
+      tone_type TEXT,
+      input_level_dbu REAL,
+      output_level_dbu REAL,
+      tags_text TEXT NOT NULL DEFAULT '',
+      favorite INTEGER NOT NULL DEFAULT 0 CHECK(favorite IN (0, 1)),
+      rating INTEGER CHECK(rating BETWEEN 1 AND 5),
+      last_used_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(root_id, relative_path)
+    );
+
+    CREATE INDEX assets_root_missing_idx ON assets(root_id, missing);
+    CREATE INDEX assets_favorite_idx ON assets(favorite, display_name);
+    CREATE INDEX assets_recent_idx ON assets(last_used_at DESC);
+    CREATE INDEX assets_sha256_idx ON assets(content_sha256)
+      WHERE content_sha256 IS NOT NULL;
+
+    CREATE VIRTUAL TABLE asset_fts USING fts5(
+      display_name,
+      relative_path,
+      modeled_by,
+      gear_make,
+      gear_model,
+      gear_type,
+      tone_type,
+      tags_text,
+      tokenize = 'unicode61 remove_diacritics 2'
+    );
+
+    CREATE TRIGGER assets_fts_insert AFTER INSERT ON assets BEGIN
+      INSERT INTO asset_fts(rowid, display_name, relative_path, modeled_by,
+                            gear_make, gear_model, gear_type, tone_type, tags_text)
+      VALUES (new.id, new.display_name, new.relative_path, new.modeled_by,
+              new.gear_make, new.gear_model, new.gear_type, new.tone_type,
+              new.tags_text);
+    END;
+
+    CREATE TRIGGER assets_fts_update AFTER UPDATE OF display_name, relative_path,
+      modeled_by, gear_make, gear_model, gear_type, tone_type, tags_text ON assets BEGIN
+      DELETE FROM asset_fts WHERE rowid = old.id;
+      INSERT INTO asset_fts(rowid, display_name, relative_path, modeled_by,
+                            gear_make, gear_model, gear_type, tone_type, tags_text)
+      VALUES (new.id, new.display_name, new.relative_path, new.modeled_by,
+              new.gear_make, new.gear_model, new.gear_type, new.tone_type,
+              new.tags_text);
+    END;
+
+    CREATE TRIGGER assets_fts_delete AFTER DELETE ON assets BEGIN
+      DELETE FROM asset_fts WHERE rowid = old.id;
+    END;
+
+    CREATE TABLE tags (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    );
+
+    CREATE TABLE asset_tags (
+      asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY(asset_id, tag_id)
+    );
+
+    PRAGMA user_version = 2;
+  )SQL");
+}
+
 }  // namespace
 
 Statement::Statement(sqlite3* database, const std::string_view sql)
     : database_(database) {
-  const auto result = sqlite3_prepare_v2(database_, sql.data(),
-                                         static_cast<int>(sql.size()),
-                                         &statement_, nullptr);
+  const auto result =
+      sqlite3_prepare_v2(database_, sql.data(), static_cast<int>(sql.size()),
+                         &statement_, nullptr);
   check_result(database_, result, "Unable to prepare SQLite statement");
 }
 
@@ -171,8 +269,8 @@ void exec(sqlite3* database, const std::string_view sql) {
   const auto result = sqlite3_exec(database, std::string(sql).c_str(), nullptr,
                                    nullptr, &error_message);
   if (result != SQLITE_OK) {
-    std::string message = error_message != nullptr ? error_message
-                                                   : sqlite3_errmsg(database);
+    std::string message =
+        error_message != nullptr ? error_message : sqlite3_errmsg(database);
     sqlite3_free(error_message);
     throw LibraryDatabaseError(message);
   }
@@ -278,7 +376,8 @@ std::filesystem::path relative_to_root(const std::filesystem::path& asset,
                                        const std::filesystem::path& root) {
   std::error_code error;
   auto relative = std::filesystem::relative(asset, root, error);
-  if (!error && !relative.empty() && relative != std::filesystem::path(".")) {
+  if (!error && !relative.empty() &&
+      relative != std::filesystem::path(".")) {
     return relative.lexically_normal();
   }
   return asset.filename();
@@ -306,9 +405,9 @@ LibraryDatabase::Impl::Impl(const std::filesystem::path& path) {
       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
       nullptr);
   if (result != SQLITE_OK) {
-    std::string message = database != nullptr
-                              ? sqlite3_errmsg(database)
-                              : "SQLite could not allocate a database handle";
+    std::string message =
+        database != nullptr ? sqlite3_errmsg(database)
+                            : "SQLite could not allocate a database handle";
     if (database != nullptr) {
       sqlite3_close(database);
       database = nullptr;
@@ -332,118 +431,42 @@ LibraryDatabase::Impl::~Impl() {
 void LibraryDatabase::Impl::migrate() {
   int version = 0;
   {
-    Statement version_statement(database, "PRAGMA user_version");
-    if (version_statement.step() != SQLITE_ROW) {
+    Statement statement(database, "PRAGMA user_version");
+    if (statement.step() != SQLITE_ROW) {
       throw LibraryDatabaseError("Unable to read database schema version");
     }
-    version = sqlite3_column_int(version_statement.get(), 0);
+    version = sqlite3_column_int(statement.get(), 0);
   }
 
   if (version > detail::kCurrentSchemaVersion) {
     throw LibraryDatabaseError(
         "Library database was created by a newer BRKNAM version");
   }
-
-  if (version != 0) {
+  if (version == detail::kCurrentSchemaVersion) {
     return;
   }
 
-  Transaction transaction(database);
-  exec(database, R"SQL(
-    CREATE TABLE library_roots (
-      id INTEGER PRIMARY KEY,
-      path TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
-      scan_generation INTEGER NOT NULL DEFAULT 0,
-      last_scan_started_at INTEGER,
-      last_scan_completed_at INTEGER
-    );
+  if (version == 0) {
+    Transaction transaction(database);
+    detail::create_schema_v2(database);
+    transaction.commit();
+    return;
+  }
 
-    CREATE TABLE assets (
-      id INTEGER PRIMARY KEY,
-      root_id INTEGER NOT NULL REFERENCES library_roots(id) ON DELETE CASCADE,
-      path TEXT NOT NULL,
-      relative_path TEXT NOT NULL,
-      kind INTEGER NOT NULL CHECK(kind IN (0, 1)),
-      size_bytes INTEGER NOT NULL,
-      modified_ticks INTEGER NOT NULL,
-      seen_generation INTEGER NOT NULL DEFAULT 0,
-      missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0, 1)),
-      parse_status INTEGER NOT NULL DEFAULT 0 CHECK(parse_status IN (0, 1, 2)),
-      parse_error TEXT,
-      display_name TEXT NOT NULL,
-      file_version TEXT,
-      architecture TEXT,
-      sample_rate_hz REAL,
-      modeled_by TEXT,
-      gear_make TEXT,
-      gear_model TEXT,
-      gear_type TEXT,
-      tone_type TEXT,
-      input_level_dbu REAL,
-      output_level_dbu REAL,
-      tags_text TEXT NOT NULL DEFAULT '',
-      favorite INTEGER NOT NULL DEFAULT 0 CHECK(favorite IN (0, 1)),
-      rating INTEGER CHECK(rating BETWEEN 1 AND 5),
-      last_used_at INTEGER,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      UNIQUE(root_id, relative_path)
-    );
+  if (version == 1) {
+    Transaction transaction(database);
+    exec(database, R"SQL(
+      ALTER TABLE assets ADD COLUMN content_sha256 TEXT
+        CHECK(content_sha256 IS NULL OR length(content_sha256) = 64);
+      CREATE INDEX assets_sha256_idx ON assets(content_sha256)
+        WHERE content_sha256 IS NOT NULL;
+      PRAGMA user_version = 2;
+    )SQL");
+    transaction.commit();
+    return;
+  }
 
-    CREATE INDEX assets_root_missing_idx ON assets(root_id, missing);
-    CREATE INDEX assets_favorite_idx ON assets(favorite, display_name);
-    CREATE INDEX assets_recent_idx ON assets(last_used_at DESC);
-
-    CREATE VIRTUAL TABLE asset_fts USING fts5(
-      display_name,
-      relative_path,
-      modeled_by,
-      gear_make,
-      gear_model,
-      gear_type,
-      tone_type,
-      tags_text,
-      tokenize = 'unicode61 remove_diacritics 2'
-    );
-
-    CREATE TRIGGER assets_fts_insert AFTER INSERT ON assets BEGIN
-      INSERT INTO asset_fts(rowid, display_name, relative_path, modeled_by,
-                            gear_make, gear_model, gear_type, tone_type, tags_text)
-      VALUES (new.id, new.display_name, new.relative_path, new.modeled_by,
-              new.gear_make, new.gear_model, new.gear_type, new.tone_type,
-              new.tags_text);
-    END;
-
-    CREATE TRIGGER assets_fts_update AFTER UPDATE OF display_name, relative_path,
-      modeled_by, gear_make, gear_model, gear_type, tone_type, tags_text ON assets BEGIN
-      DELETE FROM asset_fts WHERE rowid = old.id;
-      INSERT INTO asset_fts(rowid, display_name, relative_path, modeled_by,
-                            gear_make, gear_model, gear_type, tone_type, tags_text)
-      VALUES (new.id, new.display_name, new.relative_path, new.modeled_by,
-              new.gear_make, new.gear_model, new.gear_type, new.tone_type,
-              new.tags_text);
-    END;
-
-    CREATE TRIGGER assets_fts_delete AFTER DELETE ON assets BEGIN
-      DELETE FROM asset_fts WHERE rowid = old.id;
-    END;
-
-    CREATE TABLE tags (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE COLLATE NOCASE
-    );
-
-    CREATE TABLE asset_tags (
-      asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-      PRIMARY KEY(asset_id, tag_id)
-    );
-
-    PRAGMA user_version = 1;
-  )SQL");
-  transaction.commit();
+  throw LibraryDatabaseError("No migration path for library database");
 }
 
 std::vector<std::string> LibraryDatabase::Impl::tags_for(
@@ -471,22 +494,24 @@ AssetRecord LibraryDatabase::Impl::read_asset(sqlite3_stmt* statement) const {
   asset.size_bytes =
       static_cast<std::uintmax_t>(sqlite3_column_int64(statement, 5));
   asset.modified_ticks = sqlite3_column_int64(statement, 6);
-  asset.missing = sqlite3_column_int(statement, 7) != 0;
-  asset.parse_status = static_cast<ParseStatus>(sqlite3_column_int(statement, 8));
-  asset.parse_error = optional_text(statement, 9);
-  asset.display_name = required_text(statement, 10);
-  asset.file_version = optional_text(statement, 11);
-  asset.architecture = optional_text(statement, 12);
-  asset.sample_rate_hz = optional_double(statement, 13);
-  asset.modeled_by = optional_text(statement, 14);
-  asset.gear_make = optional_text(statement, 15);
-  asset.gear_model = optional_text(statement, 16);
-  asset.gear_type = optional_text(statement, 17);
-  asset.tone_type = optional_text(statement, 18);
-  asset.input_level_dbu = optional_double(statement, 19);
-  asset.output_level_dbu = optional_double(statement, 20);
-  asset.favorite = sqlite3_column_int(statement, 21) != 0;
-  asset.rating = optional_int(statement, 22);
+  asset.content_sha256 = optional_text(statement, 7);
+  asset.missing = sqlite3_column_int(statement, 8) != 0;
+  asset.parse_status =
+      static_cast<ParseStatus>(sqlite3_column_int(statement, 9));
+  asset.parse_error = optional_text(statement, 10);
+  asset.display_name = required_text(statement, 11);
+  asset.file_version = optional_text(statement, 12);
+  asset.architecture = optional_text(statement, 13);
+  asset.sample_rate_hz = optional_double(statement, 14);
+  asset.modeled_by = optional_text(statement, 15);
+  asset.gear_make = optional_text(statement, 16);
+  asset.gear_model = optional_text(statement, 17);
+  asset.gear_type = optional_text(statement, 18);
+  asset.tone_type = optional_text(statement, 19);
+  asset.input_level_dbu = optional_double(statement, 20);
+  asset.output_level_dbu = optional_double(statement, 21);
+  asset.favorite = sqlite3_column_int(statement, 22) != 0;
+  asset.rating = optional_int(statement, 23);
   asset.tags = tags_for(asset.id);
   return asset;
 }

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2026 Myldy design / @myldy20
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 // See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #include "LibraryDatabaseInternal.hpp"
+#include "Sha256.hpp"
 
 #include <algorithm>
+#include <system_error>
 #include <utility>
 
 namespace brknam::library {
@@ -13,12 +15,36 @@ using detail::Statement;
 using detail::Transaction;
 using detail::default_root_name;
 using detail::exec;
+using detail::kind_to_int;
 using detail::make_fts_query;
+using detail::modified_ticks;
 using detail::normalize_path;
 using detail::path_from_utf8;
 using detail::path_to_utf8;
 using detail::required_text;
+using detail::sha256_file;
 using detail::unix_time_now;
+
+namespace {
+
+constexpr auto kAssetColumns =
+    "id, root_id, path, relative_path, kind, size_bytes, modified_ticks, "
+    "content_sha256, missing, parse_status, parse_error, display_name, "
+    "file_version, architecture, sample_rate_hz, modeled_by, gear_make, "
+    "gear_model, gear_type, tone_type, input_level_dbu, output_level_dbu, "
+    "favorite, rating ";
+
+constexpr auto kPrefixedAssetColumns =
+    "assets.id, assets.root_id, assets.path, assets.relative_path, assets.kind, "
+    "assets.size_bytes, assets.modified_ticks, assets.content_sha256, "
+    "assets.missing, assets.parse_status, assets.parse_error, "
+    "assets.display_name, assets.file_version, assets.architecture, "
+    "assets.sample_rate_hz, assets.modeled_by, assets.gear_make, "
+    "assets.gear_model, assets.gear_type, assets.tone_type, "
+    "assets.input_level_dbu, assets.output_level_dbu, assets.favorite, "
+    "assets.rating ";
+
+}  // namespace
 
 LibraryDatabase::LibraryDatabase(const std::filesystem::path& database_path)
     : impl_(std::make_unique<Impl>(database_path)) {}
@@ -81,23 +107,15 @@ std::vector<AssetRecord> LibraryDatabase::search(
     const SearchOptions& options) const {
   const auto bounded_limit = std::min<std::size_t>(options.limit, 1000);
   const auto fts_query = make_fts_query(query);
-  const std::string selected_columns =
-      "assets.id, assets.root_id, assets.path, assets.relative_path, assets.kind, "
-      "assets.size_bytes, assets.modified_ticks, assets.missing, "
-      "assets.parse_status, assets.parse_error, assets.display_name, "
-      "assets.file_version, assets.architecture, assets.sample_rate_hz, "
-      "assets.modeled_by, assets.gear_make, assets.gear_model, assets.gear_type, "
-      "assets.tone_type, assets.input_level_dbu, assets.output_level_dbu, "
-      "assets.favorite, assets.rating ";
 
   std::string sql;
   if (fts_query.empty()) {
-    sql = "SELECT " + selected_columns +
+    sql = std::string("SELECT ") + kPrefixedAssetColumns +
           "FROM assets WHERE (? OR assets.missing = 0) "
           "ORDER BY assets.favorite DESC, assets.display_name COLLATE NOCASE "
           "LIMIT ?";
   } else {
-    sql = "SELECT " + selected_columns +
+    sql = std::string("SELECT ") + kPrefixedAssetColumns +
           "FROM asset_fts JOIN assets ON assets.id = asset_fts.rowid "
           "WHERE asset_fts MATCH ? AND (? OR assets.missing = 0) "
           "ORDER BY assets.favorite DESC, bm25(asset_fts), "
@@ -121,13 +139,9 @@ std::vector<AssetRecord> LibraryDatabase::search(
 
 std::optional<AssetRecord> LibraryDatabase::asset(
     const std::int64_t asset_id) const {
-  Statement statement(impl_->database, R"SQL(
-    SELECT id, root_id, path, relative_path, kind, size_bytes, modified_ticks,
-           missing, parse_status, parse_error, display_name, file_version,
-           architecture, sample_rate_hz, modeled_by, gear_make, gear_model,
-           gear_type, tone_type, input_level_dbu, output_level_dbu, favorite, rating
-    FROM assets WHERE id = ?
-  )SQL");
+  Statement statement(
+      impl_->database,
+      std::string("SELECT ") + kAssetColumns + "FROM assets WHERE id = ?");
   statement.bind(1, asset_id);
   if (statement.step() != SQLITE_ROW) {
     return std::nullopt;
@@ -136,20 +150,119 @@ std::optional<AssetRecord> LibraryDatabase::asset(
 }
 
 std::vector<AssetRecord> LibraryDatabase::recent(const std::size_t limit) const {
-  Statement statement(impl_->database, R"SQL(
-    SELECT id, root_id, path, relative_path, kind, size_bytes, modified_ticks,
-           missing, parse_status, parse_error, display_name, file_version,
-           architecture, sample_rate_hz, modeled_by, gear_make, gear_model,
-           gear_type, tone_type, input_level_dbu, output_level_dbu, favorite, rating
-    FROM assets WHERE last_used_at IS NOT NULL
-    ORDER BY last_used_at DESC LIMIT ?
-  )SQL");
+  Statement statement(
+      impl_->database,
+      std::string("SELECT ") + kAssetColumns +
+          "FROM assets WHERE last_used_at IS NOT NULL "
+          "ORDER BY last_used_at DESC LIMIT ?");
   statement.bind(
       1, static_cast<std::int64_t>(std::min<std::size_t>(limit, 1000)));
 
   std::vector<AssetRecord> result;
   while (statement.step() == SQLITE_ROW) {
     result.push_back(impl_->read_asset(statement.get()));
+  }
+  return result;
+}
+
+std::string LibraryDatabase::ensure_sha256(const std::int64_t asset_id) {
+  const auto current = asset(asset_id);
+  if (!current.has_value()) {
+    throw LibraryDatabaseError("Unknown asset id");
+  }
+  if (current->missing) {
+    throw LibraryDatabaseError("Cannot hash a missing asset");
+  }
+
+  std::error_code error;
+  const auto status = std::filesystem::status(current->path, error);
+  if (error || !std::filesystem::is_regular_file(status)) {
+    throw LibraryDatabaseError("Asset is unavailable; refresh its library root");
+  }
+  const auto actual_size = std::filesystem::file_size(current->path, error);
+  if (error) {
+    throw LibraryDatabaseError("Unable to read asset size before hashing");
+  }
+  const auto actual_modified = modified_ticks(current->path);
+  if (actual_size != current->size_bytes ||
+      actual_modified != current->modified_ticks) {
+    throw LibraryDatabaseError(
+        "Asset changed since the last scan; refresh its library root before hashing");
+  }
+  if (current->content_sha256.has_value()) {
+    return *current->content_sha256;
+  }
+
+  const auto hash = sha256_file(current->path);
+
+  error.clear();
+  const auto size_after = std::filesystem::file_size(current->path, error);
+  if (error || size_after != actual_size ||
+      modified_ticks(current->path) != actual_modified) {
+    throw LibraryDatabaseError("Asset changed while its SHA-256 was being calculated");
+  }
+
+  Statement update(
+      impl_->database,
+      "UPDATE assets SET content_sha256 = ?, updated_at = ? "
+      "WHERE id = ? AND missing = 0 AND size_bytes = ? AND modified_ticks = ?");
+  update.bind(1, hash);
+  update.bind(2, unix_time_now());
+  update.bind(3, asset_id);
+  update.bind(4, static_cast<std::int64_t>(actual_size));
+  update.bind(5, actual_modified);
+  static_cast<void>(update.step());
+  if (sqlite3_changes(impl_->database) == 0) {
+    throw LibraryDatabaseError("Asset changed while its SHA-256 was being stored");
+  }
+  return hash;
+}
+
+std::vector<AssetRecord> LibraryDatabase::duplicate_group(
+    const std::int64_t asset_id) {
+  const auto target = asset(asset_id);
+  if (!target.has_value()) {
+    throw LibraryDatabaseError("Unknown asset id");
+  }
+  if (target->missing) {
+    throw LibraryDatabaseError("Cannot inspect duplicates for a missing asset");
+  }
+
+  const auto hash = ensure_sha256(asset_id);
+
+  Statement candidates(
+      impl_->database,
+      "SELECT id FROM assets WHERE id <> ? AND missing = 0 "
+      "AND kind = ? AND size_bytes = ?");
+  candidates.bind(1, asset_id);
+  candidates.bind(2, kind_to_int(target->kind));
+  candidates.bind(3, static_cast<std::int64_t>(target->size_bytes));
+
+  std::vector<std::int64_t> candidate_ids;
+  while (candidates.step() == SQLITE_ROW) {
+    candidate_ids.push_back(sqlite3_column_int64(candidates.get(), 0));
+  }
+  for (const auto candidate_id : candidate_ids) {
+    try {
+      static_cast<void>(ensure_sha256(candidate_id));
+    } catch (const LibraryDatabaseError&) {
+      // A stale or concurrently changed candidate should not hide valid duplicates.
+    }
+  }
+
+  Statement matches(
+      impl_->database,
+      std::string("SELECT ") + kAssetColumns +
+          "FROM assets WHERE missing = 0 AND content_sha256 = ? "
+          "ORDER BY display_name COLLATE NOCASE, path");
+  matches.bind(1, hash);
+
+  std::vector<AssetRecord> result;
+  while (matches.step() == SQLITE_ROW) {
+    result.push_back(impl_->read_asset(matches.get()));
+  }
+  if (result.size() < 2) {
+    result.clear();
   }
   return result;
 }

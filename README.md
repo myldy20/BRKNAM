@@ -8,7 +8,9 @@ BRKNAM is a local-first tool for finding, auditioning, organizing, and playing N
 
 ## Status
 
-Early development. The current E1 foundation can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+Early development. The E1 foundation can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+
+Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move.
 
 Audio processing and plugin targets begin in E2 after the local-library contract is stable.
 
@@ -46,6 +48,8 @@ On multi-config generators, add `--config Release` when building and `-C Release
 ./build/brknam-inspect /path/to/model.nam
 ./build/brknam-library library.sqlite3 index /path/to/your/NAM/library
 ./build/brknam-library library.sqlite3 search "5150 crunch"
+./build/brknam-library library.sqlite3 hash 42
+./build/brknam-library library.sqlite3 duplicates 42
 ```
 
 ## Planned targets
@@ -60,4 +64,4 @@ See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), and [p
 
 BRKNAM is licensed under **GNU GPL v3 or later**. Copyright and origin notices must be preserved as described in [`NOTICE`](NOTICE).
 
-Copyright © 2026 [Myldy design](https://github.com/myldy20) / [@myldy20](https://github.com/myldy20).
+Copyright © 2026 [Ilya Tolstoukhov](https://github.com/myldy20), using the project name **Myldy design / @myldy20**.

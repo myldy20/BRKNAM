@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2026 Myldy design / @myldy20
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
 // See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #include "LibraryDatabaseInternal.hpp"
+#include "Sha256.hpp"
 
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace brknam::library {
 
@@ -19,7 +22,74 @@ using detail::path_from_utf8;
 using detail::path_to_utf8;
 using detail::relative_to_root;
 using detail::required_text;
+using detail::sha256_file;
 using detail::unix_time_now;
+
+namespace {
+
+struct ParsedAsset {
+  nam::NamReadResult metadata;
+  ParseStatus status{ParseStatus::not_applicable};
+  std::optional<std::string> error;
+};
+
+ParsedAsset parse_asset(const LibraryAsset& asset, RefreshStats& stats) {
+  ParsedAsset result;
+  if (asset.kind != AssetKind::nam_model) {
+    return result;
+  }
+
+  result.metadata = nam::read_metadata(asset.path);
+  if (result.metadata) {
+    result.status = ParseStatus::parsed;
+  } else {
+    result.status = ParseStatus::error;
+    result.error = result.metadata.error.has_value()
+                       ? result.metadata.error->message
+                       : std::string("Unknown metadata error");
+    ++stats.parse_errors;
+  }
+  return result;
+}
+
+void bind_asset_metadata(Statement& statement, int& index,
+                         const LibraryAsset& scanned,
+                         const ParsedAsset& parsed) {
+  const auto* value = parsed.metadata.metadata.has_value()
+                          ? &*parsed.metadata.metadata
+                          : nullptr;
+  statement.bind(index++, static_cast<int>(parsed.status));
+  bind_optional(statement, index++, parsed.error);
+  statement.bind(index++, display_name_for(scanned, parsed.metadata));
+  bind_optional(statement, index++,
+                value != nullptr
+                    ? std::optional<std::string>(value->file_version)
+                    : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr
+                    ? std::optional<std::string>(value->architecture)
+                    : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr
+                    ? std::optional<double>(value->sample_rate_hz)
+                    : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->modeled_by : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->gear_make : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->gear_model : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->gear_type : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->tone_type : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->input_level_dbu : std::nullopt);
+  bind_optional(statement, index++,
+                value != nullptr ? value->output_level_dbu : std::nullopt);
+}
+
+}  // namespace
 
 RefreshStats LibraryDatabase::refresh_root(const std::int64_t root_id,
                                            const ScanOptions& options) {
@@ -32,21 +102,23 @@ RefreshStats LibraryDatabase::refresh_root(const std::int64_t root_id,
     throw LibraryDatabaseError("Unknown or disabled library root");
   }
 
-  const auto root_path = path_from_utf8(required_text(root_statement.get(), 0));
+  const auto root_path =
+      path_from_utf8(required_text(root_statement.get(), 0));
   std::error_code root_error;
   const auto root_status = std::filesystem::status(root_path, root_error);
-  if (root_error || (!std::filesystem::is_directory(root_status) &&
-                     !std::filesystem::is_regular_file(root_status))) {
+  if (root_error ||
+      (!std::filesystem::is_directory(root_status) &&
+       !std::filesystem::is_regular_file(root_status))) {
     throw LibraryDatabaseError(
         "Library root is unavailable; existing index was preserved");
   }
 
   const std::int64_t generation =
-      static_cast<std::int64_t>(sqlite3_column_int64(root_statement.get(), 1)) + 1;
+      sqlite3_column_int64(root_statement.get(), 1) + 1;
   auto report = scan_library(root_path, options);
   RefreshStats stats;
   stats.discovered = report.assets.size();
-  stats.scan_issues = report.issues;
+  stats.scan_issues = std::move(report.issues);
 
   Transaction transaction(impl_->database);
   const auto now = unix_time_now();
@@ -69,18 +141,36 @@ RefreshStats LibraryDatabase::refresh_root(const std::int64_t root_id,
       impl_->database,
       "UPDATE assets SET path = ?, seen_generation = ?, missing = 0, "
       "updated_at = ? WHERE id = ?");
+  Statement missing_candidates(
+      impl_->database,
+      "SELECT id, content_sha256, path, missing FROM assets "
+      "WHERE root_id = ? AND relative_path <> ? AND kind = ? "
+      "AND size_bytes = ? AND content_sha256 IS NOT NULL");
+
+  Statement recover(impl_->database, R"SQL(
+    UPDATE assets SET
+      path = ?, relative_path = ?, kind = ?, size_bytes = ?, modified_ticks = ?,
+      seen_generation = ?, missing = 0, parse_status = ?, parse_error = ?,
+      display_name = ?, file_version = ?, architecture = ?, sample_rate_hz = ?,
+      modeled_by = ?, gear_make = ?, gear_model = ?, gear_type = ?, tone_type = ?,
+      input_level_dbu = ?, output_level_dbu = ?, updated_at = ?
+    WHERE id = ?
+  )SQL");
+
   Statement upsert(impl_->database, R"SQL(
     INSERT INTO assets(
-      root_id, path, relative_path, kind, size_bytes, modified_ticks, seen_generation,
-      missing, parse_status, parse_error, display_name, file_version, architecture,
-      sample_rate_hz, modeled_by, gear_make, gear_model, gear_type, tone_type,
-      input_level_dbu, output_level_dbu, created_at, updated_at
-    ) VALUES(?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      root_id, path, relative_path, kind, size_bytes, modified_ticks,
+      content_sha256, seen_generation, missing, parse_status, parse_error,
+      display_name, file_version, architecture, sample_rate_hz, modeled_by,
+      gear_make, gear_model, gear_type, tone_type, input_level_dbu,
+      output_level_dbu, created_at, updated_at
+    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(root_id, relative_path) DO UPDATE SET
       path = excluded.path,
       kind = excluded.kind,
       size_bytes = excluded.size_bytes,
       modified_ticks = excluded.modified_ticks,
+      content_sha256 = excluded.content_sha256,
       seen_generation = excluded.seen_generation,
       missing = 0,
       parse_status = excluded.parse_status,
@@ -135,25 +225,79 @@ RefreshStats LibraryDatabase::refresh_root(const std::int64_t root_id,
       continue;
     }
 
-    nam::NamReadResult metadata;
-    ParseStatus parse_status = ParseStatus::not_applicable;
-    std::optional<std::string> parse_error;
-    if (scanned.kind == AssetKind::nam_model) {
-      metadata = nam::read_metadata(scanned.path);
-      if (metadata) {
-        parse_status = ParseStatus::parsed;
-      } else {
-        parse_status = ParseStatus::error;
-        parse_error = metadata.error.has_value()
-                          ? metadata.error->message
-                          : std::string("Unknown metadata error");
-        ++stats.parse_errors;
+    std::optional<std::string> calculated_hash;
+    std::optional<std::int64_t> recovered_id;
+    if (!existed) {
+      missing_candidates.reset();
+      missing_candidates.bind(1, root_id);
+      missing_candidates.bind(2, relative_text);
+      missing_candidates.bind(3, kind_to_int(scanned.kind));
+      missing_candidates.bind(
+          4, static_cast<std::int64_t>(scanned.size_bytes));
+
+      std::vector<std::pair<std::int64_t, std::string>> candidates;
+      while (missing_candidates.step() == SQLITE_ROW) {
+        const auto candidate_path =
+            path_from_utf8(required_text(missing_candidates.get(), 2));
+        const bool already_missing =
+            sqlite3_column_int(missing_candidates.get(), 3) != 0;
+        std::error_code candidate_error;
+        const bool still_present =
+            std::filesystem::is_regular_file(candidate_path, candidate_error);
+        if (!already_missing && !candidate_error && still_present) {
+          continue;
+        }
+        candidates.emplace_back(
+            sqlite3_column_int64(missing_candidates.get(), 0),
+            required_text(missing_candidates.get(), 1));
+      }
+
+      if (!candidates.empty()) {
+        try {
+          calculated_hash = sha256_file(scanned.path);
+          std::optional<std::int64_t> match;
+          bool ambiguous = false;
+          for (const auto& [candidate_id, candidate_hash] : candidates) {
+            if (candidate_hash != *calculated_hash) {
+              continue;
+            }
+            if (match.has_value()) {
+              ambiguous = true;
+              break;
+            }
+            match = candidate_id;
+          }
+          if (!ambiguous) {
+            recovered_id = match;
+          }
+        } catch (const LibraryDatabaseError& error) {
+          stats.scan_issues.push_back(
+              {scanned.path, std::string("Unable to hash move candidate: ") +
+                                 error.what()});
+        }
       }
     }
 
-    const auto* value = metadata.metadata.has_value()
-                            ? &*metadata.metadata
-                            : nullptr;
+    const auto parsed = parse_asset(scanned, stats);
+
+    if (recovered_id.has_value()) {
+      recover.reset();
+      int index = 1;
+      recover.bind(index++, absolute_text);
+      recover.bind(index++, relative_text);
+      recover.bind(index++, kind_to_int(scanned.kind));
+      recover.bind(index++,
+                   static_cast<std::int64_t>(scanned.size_bytes));
+      recover.bind(index++, modified);
+      recover.bind(index++, generation);
+      bind_asset_metadata(recover, index, scanned, parsed);
+      recover.bind(index++, now);
+      recover.bind(index, *recovered_id);
+      static_cast<void>(recover.step());
+      ++stats.moved;
+      continue;
+    }
+
     upsert.reset();
     int index = 1;
     upsert.bind(index++, root_id);
@@ -162,36 +306,9 @@ RefreshStats LibraryDatabase::refresh_root(const std::int64_t root_id,
     upsert.bind(index++, kind_to_int(scanned.kind));
     upsert.bind(index++, static_cast<std::int64_t>(scanned.size_bytes));
     upsert.bind(index++, modified);
+    bind_optional(upsert, index++, calculated_hash);
     upsert.bind(index++, generation);
-    upsert.bind(index++, static_cast<int>(parse_status));
-    bind_optional(upsert, index++, parse_error);
-    upsert.bind(index++, display_name_for(scanned, metadata));
-    bind_optional(upsert, index++,
-                  value != nullptr
-                      ? std::optional<std::string>(value->file_version)
-                      : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr
-                      ? std::optional<std::string>(value->architecture)
-                      : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr
-                      ? std::optional<double>(value->sample_rate_hz)
-                      : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->modeled_by : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->gear_make : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->gear_model : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->gear_type : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->tone_type : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->input_level_dbu : std::nullopt);
-    bind_optional(upsert, index++,
-                  value != nullptr ? value->output_level_dbu : std::nullopt);
+    bind_asset_metadata(upsert, index, scanned, parsed);
     upsert.bind(index++, now);
     upsert.bind(index, now);
     static_cast<void>(upsert.step());

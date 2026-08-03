@@ -1,6 +1,6 @@
 # BRKNAM attribution
 
-BRKNAM is Copyright © 2026 Myldy design / @myldy20.
+BRKNAM is Copyright © 2026 Ilya Tolstoukhov, using the project name Myldy design / @myldy20.
 
 The canonical GPLv3 section 7(b) origin notice is defined in [`NOTICE`](NOTICE):
 
