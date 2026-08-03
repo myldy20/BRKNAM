@@ -6,6 +6,12 @@ option(BRKNAM_BUILD_TOOLS "Build BRKNAM command-line tools" ON)
 option(BRKNAM_BUILD_TESTS "Build BRKNAM tests" ON)
 option(BRKNAM_USE_SYSTEM_SQLITE "Use a system SQLite library instead of the pinned amalgamation" OFF)
 option(BRKNAM_ENABLE_NAM_CORE "Build the pinned NeuralAmpModelerCore adapter" OFF)
+option(BRKNAM_ENABLE_IPLUG2 "Build the iPlug2 APP, VST3 and AU shell" OFF)
+
+if(BRKNAM_ENABLE_IPLUG2)
+  set(BRKNAM_ENABLE_NAM_CORE ON CACHE BOOL
+      "Build the pinned NeuralAmpModelerCore adapter" FORCE)
+endif()
 
 find_package(Threads REQUIRED)
 
@@ -146,6 +152,29 @@ if(BRKNAM_ENABLE_NAM_CORE)
       -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion
     )
   endif()
+endif()
+
+if(BRKNAM_ENABLE_IPLUG2)
+  include(cmake/DependencyPins.cmake)
+  include(FetchContent)
+
+  FetchContent_Declare(
+    brknam_iplug2_source
+    GIT_REPOSITORY ${BRKNAM_IPLUG2_REPOSITORY}
+    GIT_TAG ${BRKNAM_IPLUG2_COMMIT}
+    GIT_SHALLOW FALSE
+    GIT_PROGRESS TRUE
+    SOURCE_SUBDIR brknam-no-cmake-project
+  )
+  FetchContent_MakeAvailable(brknam_iplug2_source)
+
+  set(IPLUG2_DIR ${brknam_iplug2_source_SOURCE_DIR} CACHE PATH
+      "Pinned iPlug2 root" FORCE)
+  set(IPLUG2_CXX_STANDARD 20 CACHE STRING
+      "C++ standard used by iPlug2" FORCE)
+  include(${IPLUG2_DIR}/iPlug2.cmake)
+  find_package(iPlug2 REQUIRED)
+  add_subdirectory(plugin/BRKNAM)
 endif()
 
 if(BRKNAM_BUILD_TOOLS)
