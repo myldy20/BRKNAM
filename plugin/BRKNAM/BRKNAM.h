@@ -10,6 +10,7 @@
 #include "brknam/audio/NamCoreModel.hpp"
 #include "brknam/audio/OneSlotProcessor.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -30,6 +31,7 @@ enum ECtrlTags {
   kModelNameTag = 0,
   kStatusTag,
   kLatencyTag,
+  kAudioStatusTag,
   kNumCtrlTags,
 };
 
@@ -62,6 +64,22 @@ class BRKNAM final : public iplug::Plugin {
   int reported_latency_samples_{};
   std::string displayed_model_name_{"No model loaded"};
   std::string displayed_status_{"Dry signal"};
+  std::string displayed_audio_status_{"AUDIO: waiting for stream"};
+
+  // Written by the realtime thread and consumed by OnIdle. The peak atomics
+  // hold the maximum absolute sample observed since the previous UI refresh.
+  std::atomic<std::uint64_t> audio_callback_count_{0};
+  std::atomic<float> input_peak_{0.0F};
+  std::atomic<float> output_peak_{0.0F};
+  std::atomic<int> last_process_status_{
+      static_cast<int>(brknam::audio::ProcessStatus::not_prepared)};
+  std::atomic<int> last_input_channels_{0};
+  std::atomic<int> last_output_channels_{0};
+
+  std::uint64_t displayed_callback_count_{};
+  int stale_audio_ticks_{};
+  float displayed_input_peak_{};
+  float displayed_output_peak_{};
 
   WDL_String dialog_file_name_;
   WDL_String dialog_path_;
