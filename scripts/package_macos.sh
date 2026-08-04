@@ -48,10 +48,17 @@ bundle_executable() {
 verify_bundle() {
   local bundle="$1"
   local executable=""
+  local architectures=""
 
   executable="$(bundle_executable "${bundle}")"
-  echo "Verifying universal executable: ${executable}"
-  lipo -verify_arch x86_64 arm64 "${executable}"
+  architectures="$(lipo -archs "${executable}")"
+  echo "Verifying universal executable: ${executable} (${architectures})"
+
+  if ! grep -qw x86_64 <<<"${architectures}" || ! grep -qw arm64 <<<"${architectures}"; then
+    echo "Expected x86_64 and arm64 slices, found: ${architectures}" >&2
+    return 1
+  fi
+
   codesign --verify --deep --strict --verbose=2 "${bundle}"
 }
 
