@@ -15,6 +15,12 @@ This is an **unsigned development build** intended for functional testing. It is
 - automatic model-rate resampling and host latency reporting;
 - click-reduced background model replacement.
 
+`0.1.0-alpha.2` packages the UI font correctly, disables the unsafe native knob-value prompt that crashed the macOS standalone build, and adds an explicit audio signal-flow hint.
+
+`0.1.0-alpha.3` adds a direct `AUDIO SETUP` button in the standalone app, reports whether the realtime audio callback is running, shows connected input/output channel counts and live IN/OUT peak levels, and distinguishes a model that is merely prepared from one actually activated by the audio thread.
+
+`0.1.0-alpha.4` fixes the pinned iPlug2 standalone host for one-channel CoreAudio inputs, selects a valid common sample rate when the saved rate is unavailable, and opens the selected hardware input channel. The standalone contract is now one selected input channel processed to stereo output; VST3 and AU retain mono/stereo host routing.
+
 ## Known limitations
 
 - There is no IR loader yet. Amp-only captures will usually need a separate cab/IR plugin after BRKNAM. Full-rig or cab-inclusive NAM captures can be auditioned directly.
@@ -46,6 +52,42 @@ killall -9 AudioComponentRegistrar 2>/dev/null || true
 
 In Ableton Live, enable VST3 and/or Audio Units in **Settings → Plug-Ins**, then run a full rescan if BRKNAM does not appear immediately.
 
+## Standalone audio setup
+
+The standalone application processes live audio; it does not generate a test tone by itself.
+
+Click **AUDIO SETUP** inside BRKNAM, or open **BRKNAM → Preferences…** from the macOS menu bar, then choose:
+
+- the audio input device or interface receiving the guitar/DI signal;
+- `Input 1 (L)`: the single hardware channel BRKNAM should process;
+- the audio output device or interface;
+- the stereo output pair;
+- a sample rate and buffer size.
+
+`Input 2 (R)` remains visible in the generic iPlug2 preferences dialog but is not used by the BRKNAM standalone processor. Plug-in formats still accept host-provided mono or stereo input.
+
+A practical first setup is 48 kHz, 128 or 256 samples, mono input from the interface, and stereo output to the same interface. For initial fault isolation, prefer the MacBook speakers or the same wired audio interface over a Bluetooth output device. The on-screen signal flow is:
+
+`INPUT DEVICE → INPUT TRIM → NAM MODEL → OUTPUT TRIM → OUTPUT DEVICE`
+
+macOS must also allow BRKNAM to use audio input. Check **System Settings → Privacy & Security → Microphone** if the app reports no input signal. Some audio interfaces are represented by this permission even though they are not literal microphones.
+
+When BRKNAM runs as VST3 or AU, device selection is handled by the DAW. Put BRKNAM on an audio track, route the guitar/DI input to that track, enable input monitoring, and route the track to the desired output.
+
+## Reading the audio diagnostic line
+
+- `AUDIO: OFF` means the realtime callback is not running. Open `AUDIO SETUP`, verify the selected devices, and check macOS input permission.
+- `AUDIO: RUNNING` with `IN -inf dBFS` means the stream is open but BRKNAM receives silence. Check the interface input, selected channel, cable, gain and permission.
+- A moving `IN` value with silent `OUT` means the signal reaches BRKNAM but is lost during processing. Switch `LEVEL MODE` to `RAW`, then switch `NAM MODEL` to `BYPASS`.
+- Sound in `BYPASS` but not in `ACTIVE` isolates the problem to the model path or output mode.
+- Silence in both `ACTIVE` and `BYPASS` isolates the problem to standalone routing or the output device.
+
+The model status also has distinct meanings:
+
+- `Model ready — waiting for audio thread`: loading succeeded, but no audio callback has consumed the model yet;
+- `Activating model`: the realtime crossfade is in progress;
+- `Model active`: the audio callback has accepted the model.
+
 ## Windows installation
 
 1. Run `Standalone/BRKNAM.exe` directly.
@@ -61,14 +103,15 @@ Windows SmartScreen may warn because this alpha is not code-signed. Verify the S
 Use a short clean DI guitar loop so every model receives identical input.
 
 1. Start at 48 kHz with a 128- or 256-sample buffer.
-2. Load a known-working A1 model.
-3. Compare `ACTIVE` and `BYPASS` and check the input/output controls.
-4. Load an A2 Lite or A2 Full model while audio is running.
-5. Switch between several models quickly and listen for crashes, silence, harsh clicks, or stuck status text.
-6. Repeat at 44.1 kHz and 96 kHz.
-7. Try mono-in/mono-out and mono-in/stereo-out routing in the DAW.
-8. Check that the displayed latency changes when required and that DAW playback stays aligned.
-9. Try `NORMALIZED`; models without the required loudness metadata may sound unchanged, which is expected.
+2. Confirm `AUDIO: RUNNING` and that the `IN` level moves before loading a model.
+3. Start in `RAW` mode and load a known-working A1 model.
+4. Compare `ACTIVE` and `BYPASS` and check the input/output controls.
+5. Load an A2 Lite or A2 Full model while audio is running.
+6. Switch between several models quickly and listen for crashes, silence, harsh clicks, or stuck status text.
+7. Repeat at 44.1 kHz and 96 kHz.
+8. Try mono-in/mono-out and mono-in/stereo-out routing in the DAW.
+9. Check that the displayed latency changes when required and that DAW playback stays aligned.
+10. Try `NORMALIZED`; models without the required loudness metadata may sound unchanged, which is expected.
 
 ## Do not test yet
 
@@ -89,6 +132,7 @@ Please include:
 - standalone, VST3, or AU;
 - DAW and version;
 - sample rate and buffer size;
+- the complete `AUDIO` diagnostic line;
 - NAM architecture if known: A1, A2 Lite, A2 Full, LSTM, WaveNet, etc.;
 - whether the capture includes a cab;
 - exact reproduction steps;

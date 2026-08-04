@@ -177,6 +177,9 @@ if(BRKNAM_ENABLE_IPLUG2)
   )
   FetchContent_MakeAvailable(brknam_iplug2_source)
 
+  set(BRKNAM_IPLUG2_SOURCE_DIR ${brknam_iplug2_source_SOURCE_DIR})
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchIPlug2StandaloneAudio.cmake)
+
   set(IPLUG2_DIR ${brknam_iplug2_source_SOURCE_DIR} CACHE PATH
       "Pinned iPlug2 root" FORCE)
   set(IPLUG2_CXX_STANDARD 20 CACHE STRING
