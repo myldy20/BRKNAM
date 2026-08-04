@@ -40,7 +40,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BRKNAM_PACKAGE_VERSION: 0.1.0-alpha.3
+  BRKNAM_PACKAGE_VERSION: 0.1.0-alpha.4
 
 jobs:
   macos-universal:
