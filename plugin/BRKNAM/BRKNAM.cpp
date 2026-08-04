@@ -18,21 +18,50 @@ using namespace igraphics;
 
 namespace {
 
-const IColor kBackground{255, 22, 24, 27};
-const IColor kPanel{255, 35, 38, 43};
-const IColor kText{255, 232, 235, 239};
-const IColor kMutedText{255, 158, 164, 173};
-const IColor kAccent{255, 234, 179, 8};
-const IColor kPressedAccent{255, 184, 138, 4};
+constexpr const char* kUiFont = "Roboto-Regular";
 
-IVStyle make_style() {
+const IColor kBackground{255, 20, 22, 25};
+const IColor kPanel{255, 31, 34, 39};
+const IColor kControlFill{255, 47, 51, 58};
+const IColor kControlPressed{255, 234, 179, 8};
+const IColor kFrame{255, 82, 88, 98};
+const IColor kText{255, 235, 238, 242};
+const IColor kMutedText{255, 156, 163, 174};
+const IColor kAccent{255, 234, 179, 8};
+const IColor kHighlight{96, 234, 179, 8};
+
+IVStyle make_control_style() {
   return DEFAULT_STYLE.WithColor(kBG, kPanel)
-      .WithColor(kFG, kAccent)
-      .WithColor(kPR, kPressedAccent)
-      .WithColor(kFR, kMutedText)
-      .WithColor(kHL, kAccent)
-      .WithColor(kSH, COLOR_BLACK)
-      .WithColor(kX1, kText);
+      .WithColor(kFG, kControlFill)
+      .WithColor(kPR, kControlPressed)
+      .WithColor(kFR, kFrame)
+      .WithColor(kHL, kHighlight)
+      .WithColor(kSH, COLOR_TRANSPARENT)
+      .WithColor(kX1, kAccent)
+      .WithLabelText(
+          IText(12.0F, kMutedText, kUiFont, EAlign::Center, EVAlign::Top))
+      .WithValueText(
+          IText(12.0F, kText, kUiFont, EAlign::Center, EVAlign::Bottom))
+      .WithRoundness(0.12F)
+      .WithFrameThickness(1.0F)
+      .WithDrawShadows(false)
+      .WithWidgetFrac(0.82F);
+}
+
+IVStyle make_button_style() {
+  return make_control_style()
+      .WithShowValue(false)
+      .WithLabelText(
+          IText(13.0F, kText, kUiFont, EAlign::Center, EVAlign::Middle))
+      .WithRoundness(0.14F)
+      .WithWidgetFrac(1.0F);
+}
+
+IVStyle make_toggle_style() {
+  return make_control_style()
+      .WithValueText(
+          IText(12.0F, kText, kUiFont, EAlign::Center, EVAlign::Middle))
+      .WithWidgetFrac(0.76F);
 }
 
 void clear_host_outputs(sample** outputs, const int output_channels,
@@ -66,22 +95,37 @@ BRKNAM::BRKNAM(const InstanceInfo& info)
     graphics->AttachPanelBackground(kBackground);
     graphics->AttachCornerResizer(EUIResizerMode::Scale, false);
     graphics->EnableMouseOver(true);
+    graphics->LoadFont(kUiFont, ROBOTO_FN);
 
     const auto bounds = graphics->GetBounds();
-    const auto style = make_style();
-    const auto content = bounds.GetPadded(-18.0F);
-    const auto title_area = content.GetFromTop(34.0F);
-    const auto model_area = content.GetFromTop(42.0F).GetVShifted(40.0F);
-    const auto controls_area = content.GetFromBottom(126.0F);
+    const auto control_style = make_control_style();
+    const auto button_style = make_button_style();
+    const auto toggle_style = make_toggle_style();
+    const auto content = bounds.GetPadded(-20.0F);
+
+    const auto header_area =
+        IRECT(content.L, content.T, content.R, content.T + 38.0F);
+    const auto model_area =
+        IRECT(content.L, content.T + 48.0F, content.R, content.T + 102.0F);
+    const auto routing_title_area =
+        IRECT(content.L, content.T + 114.0F, content.R, content.T + 132.0F);
+    const auto routing_flow_area =
+        IRECT(content.L, content.T + 134.0F, content.R, content.T + 154.0F);
+    const auto routing_hint_area =
+        IRECT(content.L, content.T + 154.0F, content.R, content.T + 176.0F);
+    const auto controls_area =
+        IRECT(content.L, content.T + 188.0F, content.R, content.B - 26.0F);
+    const auto footer =
+        IRECT(content.L, content.B - 20.0F, content.R, content.B);
 
     graphics->AttachControl(new ITextControl(
-        title_area, "BRKNAM",
-        IText(25.0F, kText, nullptr, EAlign::Near, EVAlign::Middle)));
+        header_area, "BRKNAM",
+        IText(28.0F, kText, kUiFont, EAlign::Near, EVAlign::Middle)));
     graphics->AttachControl(new ITextControl(
-        title_area.GetFromRight(245.0F), "OPEN-SOURCE NAM PLAYER",
-        IText(12.0F, kMutedText, nullptr, EAlign::Far, EVAlign::Middle)));
+        header_area.GetFromRight(300.0F), "OPEN-SOURCE NAM PLAYER",
+        IText(11.0F, kMutedText, kUiFont, EAlign::Far, EVAlign::Middle)));
 
-    const auto load_button_area = model_area.GetFromLeft(126.0F);
+    const auto load_button_area = model_area.GetFromLeft(150.0F);
     graphics->AttachControl(new IVButtonControl(
         load_button_area,
         [this](IControl* caller) {
@@ -98,14 +142,26 @@ BRKNAM::BRKNAM(const InstanceInfo& info)
                 request_model(std::filesystem::path(file_name.Get()));
               });
         },
-        "LOAD .NAM", style, true, false));
+        "LOAD .NAM", button_style, true, false));
 
     graphics->AttachControl(
         new ITextControl(
-            model_area.GetReducedFromLeft(140.0F),
+            model_area.GetReducedFromLeft(166.0F),
             displayed_model_name_.c_str(),
-            IText(16.0F, kText, nullptr, EAlign::Near, EVAlign::Middle)),
+            IText(16.0F, kText, kUiFont, EAlign::Near, EVAlign::Middle)),
         kModelNameTag);
+
+    graphics->AttachControl(new ITextControl(
+        routing_title_area, "SIGNAL FLOW",
+        IText(11.0F, kAccent, kUiFont, EAlign::Near, EVAlign::Middle)));
+    graphics->AttachControl(new ITextControl(
+        routing_flow_area,
+        "INPUT DEVICE  →  INPUT TRIM  →  NAM MODEL  →  OUTPUT TRIM  →  OUTPUT DEVICE",
+        IText(12.0F, kText, kUiFont, EAlign::Near, EVAlign::Middle)));
+    graphics->AttachControl(new ITextControl(
+        routing_hint_area,
+        "Standalone: BRKNAM menu → Preferences… for audio I/O   |   Plug-in: routing comes from the DAW track",
+        IText(11.0F, kMutedText, kUiFont, EAlign::Near, EVAlign::Middle)));
 
     const auto input_area = controls_area.GetGridCell(0, 0, 1, 4)
                                 .GetPadded(-8.0F);
@@ -116,27 +172,30 @@ BRKNAM::BRKNAM(const InstanceInfo& info)
     const auto normalize_area = controls_area.GetGridCell(0, 3, 1, 4)
                                     .GetPadded(-12.0F);
 
+    // Native value text entry currently crashes on some macOS versions in the
+    // pinned iPlug2 Cocoa view. Keep safe drag/wheel control and double-click
+    // reset, but do not invoke PromptUserInput from the knob value area.
     graphics->AttachControl(new IVKnobControl(
-        input_area, kInputTrim, "INPUT", style, true, true));
+        input_area, kInputTrim, "INPUT TRIM", control_style, false, false));
     graphics->AttachControl(new IVKnobControl(
-        output_area, kOutputTrim, "OUTPUT", style, true, true));
+        output_area, kOutputTrim, "OUTPUT TRIM", control_style, false, false));
     graphics->AttachControl(new IVToggleControl(
-        bypass_area, kModelBypass, "MODEL", style, "ACTIVE", "BYPASS"));
+        bypass_area, kModelBypass, "NAM MODEL", toggle_style, "ACTIVE",
+        "BYPASS"));
     graphics->AttachControl(new IVToggleControl(
-        normalize_area, kNormalizeOutput, "OUTPUT", style, "RAW",
+        normalize_area, kNormalizeOutput, "LEVEL MODE", toggle_style, "RAW",
         "NORMALIZED"));
 
-    const auto footer = content.GetFromBottom(20.0F);
     graphics->AttachControl(
         new ITextControl(
-            footer.GetReducedFromRight(150.0F), displayed_status_.c_str(),
-            IText(12.0F, kMutedText, nullptr, EAlign::Near,
+            footer.GetReducedFromRight(190.0F), displayed_status_.c_str(),
+            IText(11.0F, kMutedText, kUiFont, EAlign::Near,
                   EVAlign::Middle)),
         kStatusTag);
     graphics->AttachControl(
         new ITextControl(
-            footer.GetFromRight(140.0F), "Latency: 0 samples",
-            IText(12.0F, kMutedText, nullptr, EAlign::Far,
+            footer.GetFromRight(180.0F), "Latency: 0 samples",
+            IText(11.0F, kMutedText, kUiFont, EAlign::Far,
                   EVAlign::Middle)),
         kLatencyTag);
   };
