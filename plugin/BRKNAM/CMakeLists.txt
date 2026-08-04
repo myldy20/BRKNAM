@@ -27,6 +27,7 @@ endif()
 
 iplug_add_plugin(BRKNAM
   SOURCES
+    AudioDiagnostics.hpp
     BRKNAM.cpp
     BRKNAM.h
     config.h
