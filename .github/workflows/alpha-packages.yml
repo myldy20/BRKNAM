@@ -1,0 +1,117 @@
+name: Alpha packages
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/alpha-packages.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - 'plugin/**'
+      - 'scripts/package_*'
+      - 'docs/ALPHA_TESTING.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'THIRD_PARTY_NOTICES.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/alpha-packages.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'include/**'
+      - 'src/**'
+      - 'plugin/**'
+      - 'scripts/package_*'
+      - 'docs/ALPHA_TESTING.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'THIRD_PARTY_NOTICES.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alpha-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BRKNAM_PACKAGE_VERSION: 0.1.0-alpha.1
+
+jobs:
+  macos-universal:
+    name: macOS universal APP VST3 AU
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure universal plugin build
+        shell: bash
+        run: |
+          cmake -S . -B build-plugin \
+            -DBRKNAM_ENABLE_IPLUG2=ON \
+            -DBRKNAM_BUILD_TESTS=OFF \
+            -DBRKNAM_BUILD_TOOLS=OFF \
+            -DIPLUG_DEPLOY_PLUGINS=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build APP VST3 and AU
+        run: >-
+          cmake --build build-plugin --config Release
+          --target BRKNAM-app BRKNAM-vst3 BRKNAM-au
+
+      - name: Package and verify universal binaries
+        shell: bash
+        run: bash scripts/package_macos.sh build-plugin dist
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-macOS-universal
+          path: |
+            dist/BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-macOS-universal.zip
+            dist/BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-macOS-universal.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  windows-x64:
+    name: Windows x64 APP VST3
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure plugin build
+        run: >-
+          cmake -S . -B build-plugin
+          -DBRKNAM_ENABLE_IPLUG2=ON
+          -DBRKNAM_BUILD_TESTS=OFF
+          -DBRKNAM_BUILD_TOOLS=OFF
+          -DIPLUG_DEPLOY_PLUGINS=OFF
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build APP and VST3
+        run: >-
+          cmake --build build-plugin --config Release
+          --target BRKNAM-app BRKNAM-vst3
+
+      - name: Package Windows binaries
+        shell: pwsh
+        run: ./scripts/package_windows.ps1 -BuildDir build-plugin -DistDir dist
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-Windows-x64
+          path: |
+            dist/BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-Windows-x64.zip
+            dist/BRKNAM-${{ env.BRKNAM_PACKAGE_VERSION }}-Windows-x64.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

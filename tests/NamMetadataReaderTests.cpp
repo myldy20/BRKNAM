@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Ilya Tolstoukhov (@myldy20)
-// See ATTRIBUTION.md for the GPLv3 section 7(b) attribution term.
+// Copyright © 2026 Ilya Tolstoukhov (Myldy design / @myldy20)
+// See NOTICE for the GPLv3 section 7(b) origin notice.
 
 #include "brknam/nam/NamMetadataReader.hpp"
 
@@ -75,6 +75,39 @@ bool reads_metadata_without_materializing_weights() {
                 "calibration metadata should be captured");
 }
 
+bool parses_decimal_exponents_portably() {
+  TemporaryFile file(R"json({
+    "version":"0.5.4",
+    "architecture":"WaveNet",
+    "sample_rate":4.8e4,
+    "weights":[1e-3,-2.5E+2,0],
+    "metadata":{"input_level_dbu":-1.225e1,"output_level_dbu":7.5e-1}
+  })json");
+  const auto result = brknam::nam::read_metadata(file.path());
+
+  TemporaryFile overflow(
+      R"json({"version":"0.5.4","architecture":"WaveNet","sample_rate":1e9999,"weights":[]})json");
+  const auto overflow_result = brknam::nam::read_metadata(overflow.path());
+
+  TemporaryFile underflow(
+      R"json({"version":"0.5.4","architecture":"WaveNet","weights":[],"metadata":{"input_level_dbu":1e-9999}})json");
+  const auto underflow_result = brknam::nam::read_metadata(underflow.path());
+
+  return expect(static_cast<bool>(result), "scientific decimal forms should parse") &&
+         expect(result.metadata->sample_rate_hz == 48000.0,
+                "scientific sample rate should be exact") &&
+         expect(result.metadata->input_level_dbu == std::optional<double>{-12.25},
+                "negative decimal exponent should parse") &&
+         expect(result.metadata->output_level_dbu == std::optional<double>{0.75},
+                "fractional metadata should parse") &&
+         expect(!overflow_result, "overflowing JSON number should be rejected") &&
+         expect(overflow_result.error->code == brknam::nam::NamReadErrorCode::malformed_json,
+                "overflow should report malformed JSON number") &&
+         expect(!underflow_result, "underflowing nonzero JSON number should be rejected") &&
+         expect(underflow_result.error->code == brknam::nam::NamReadErrorCode::malformed_json,
+                "underflow should report malformed JSON number");
+}
+
 bool defaults_sample_rate_to_48khz() {
   TemporaryFile file(R"json({"version":"0.5.3","architecture":"LSTM","config":{},"weights":[]})json");
   const auto result = brknam::nam::read_metadata(file.path());
@@ -118,7 +151,9 @@ bool enforces_limits() {
 }  // namespace
 
 int main() {
-  const bool passed = reads_metadata_without_materializing_weights() && defaults_sample_rate_to_48khz() &&
+  const bool passed = reads_metadata_without_materializing_weights() &&
+                      parses_decimal_exponents_portably() &&
+                      defaults_sample_rate_to_48khz() &&
                       rejects_malformed_and_missing_required_fields() && enforces_limits();
   if (!passed) {
     return 1;
