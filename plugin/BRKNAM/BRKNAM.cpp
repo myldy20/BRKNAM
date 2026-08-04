@@ -4,11 +4,18 @@
 
 #include "BRKNAM.h"
 
+#include "AudioDiagnostics.hpp"
 #include "IPlug_include_in_plug_src.h"
 #include "IControls.h"
 
+#if defined(APP_API)
+#include "resources/resource.h"
+extern HWND gHWND;
+#endif
+
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -19,6 +26,8 @@ using namespace igraphics;
 namespace {
 
 constexpr const char* kUiFont = "Roboto-Regular";
+constexpr float kSilenceThreshold = 1.0e-5F;
+constexpr float kMeterDecay = 0.72F;
 
 const IColor kBackground{255, 20, 22, 25};
 const IColor kPanel{255, 31, 34, 39};
@@ -76,6 +85,23 @@ void clear_host_outputs(sample** outputs, const int output_channels,
   }
 }
 
+float buffer_peak(sample* const* buffers, const int channels,
+                  const int frames) noexcept {
+  if (buffers == nullptr || channels <= 0 || frames <= 0) {
+    return 0.0F;
+  }
+  float peak = 0.0F;
+  for (int channel = 0; channel < channels; ++channel) {
+    if (buffers[channel] == nullptr) {
+      continue;
+    }
+    for (int frame = 0; frame < frames; ++frame) {
+      peak = std::max(peak, std::abs(buffers[channel][frame]));
+    }
+  }
+  return peak;
+}
+
 }  // namespace
 
 BRKNAM::BRKNAM(const InstanceInfo& info)
@@ -112,9 +138,11 @@ BRKNAM::BRKNAM(const InstanceInfo& info)
     const auto routing_flow_area =
         IRECT(content.L, content.T + 134.0F, content.R, content.T + 154.0F);
     const auto routing_hint_area =
-        IRECT(content.L, content.T + 154.0F, content.R, content.T + 176.0F);
+        IRECT(content.L, content.T + 154.0F, content.R, content.T + 180.0F);
+    const auto diagnostics_area =
+        IRECT(content.L, content.T + 184.0F, content.R, content.T + 206.0F);
     const auto controls_area =
-        IRECT(content.L, content.T + 188.0F, content.R, content.B - 26.0F);
+        IRECT(content.L, content.T + 216.0F, content.R, content.B - 26.0F);
     const auto footer =
         IRECT(content.L, content.B - 20.0F, content.R, content.B);
 
@@ -158,10 +186,33 @@ BRKNAM::BRKNAM(const InstanceInfo& info)
         routing_flow_area,
         "INPUT DEVICE  →  INPUT TRIM  →  NAM MODEL  →  OUTPUT TRIM  →  OUTPUT DEVICE",
         IText(12.0F, kText, kUiFont, EAlign::Near, EVAlign::Middle)));
+
+#if defined(APP_API)
+    const auto setup_button_area = routing_hint_area.GetFromRight(132.0F);
+    graphics->AttachControl(new ITextControl(
+        routing_hint_area.GetReducedFromRight(146.0F),
+        "Choose the interface and channel, then play: IN and OUT below must move.",
+        IText(11.0F, kMutedText, kUiFont, EAlign::Near, EVAlign::Middle)));
+    graphics->AttachControl(new IVButtonControl(
+        setup_button_area,
+        [](IControl*) {
+          if (gHWND != nullptr) {
+            SendMessage(gHWND, WM_COMMAND, ID_PREFERENCES, 0);
+          }
+        },
+        "AUDIO SETUP", button_style, true, false));
+#else
     graphics->AttachControl(new ITextControl(
         routing_hint_area,
-        "Standalone: BRKNAM menu → Preferences… for audio I/O   |   Plug-in: routing comes from the DAW track",
+        "Plug-in audio routing comes from the DAW track. Enable input monitoring.",
         IText(11.0F, kMutedText, kUiFont, EAlign::Near, EVAlign::Middle)));
+#endif
+
+    graphics->AttachControl(
+        new ITextControl(
+            diagnostics_area, displayed_audio_status_.c_str(),
+            IText(11.0F, kText, kUiFont, EAlign::Near, EVAlign::Middle)),
+        kAudioStatusTag);
 
     const auto input_area = controls_area.GetGridCell(0, 0, 1, 4)
                                 .GetPadded(-8.0F);
@@ -207,12 +258,26 @@ BRKNAM::~BRKNAM() = default;
 #if IPLUG_DSP
 void BRKNAM::ProcessBlock(sample** inputs, sample** outputs,
                           const int nFrames) {
+  audio_callback_count_.fetch_add(1, std::memory_order_relaxed);
+
   const auto connected_inputs = NInChansConnected();
   const auto connected_outputs = NOutChansConnected();
+  last_input_channels_.store(connected_inputs, std::memory_order_relaxed);
+  last_output_channels_.store(connected_outputs, std::memory_order_relaxed);
+
   const auto output_channels = std::clamp(connected_outputs, 0, 2);
-  if (outputs == nullptr || nFrames <= 0 || connected_inputs <= 0 ||
-      connected_outputs <= 0 || inputs == nullptr) {
+  if (outputs == nullptr || inputs == nullptr || nFrames <= 0) {
+    last_process_status_.store(
+        static_cast<int>(brknam::audio::ProcessStatus::invalid_buffer),
+        std::memory_order_relaxed);
     clear_host_outputs(outputs, output_channels, std::max(0, nFrames));
+    return;
+  }
+  if (connected_inputs <= 0 || connected_outputs <= 0) {
+    last_process_status_.store(
+        static_cast<int>(brknam::audio::ProcessStatus::invalid_channel_count),
+        std::memory_order_relaxed);
+    clear_host_outputs(outputs, output_channels, nFrames);
     return;
   }
 
@@ -221,6 +286,9 @@ void BRKNAM::ProcessBlock(sample** inputs, sample** outputs,
   std::array<float*, 2> core_outputs{};
   for (int channel = 0; channel < input_channels; ++channel) {
     if (inputs[channel] == nullptr) {
+      last_process_status_.store(
+          static_cast<int>(brknam::audio::ProcessStatus::invalid_buffer),
+          std::memory_order_relaxed);
       clear_host_outputs(outputs, output_channels, nFrames);
       return;
     }
@@ -228,19 +296,39 @@ void BRKNAM::ProcessBlock(sample** inputs, sample** outputs,
   }
   for (int channel = 0; channel < output_channels; ++channel) {
     if (outputs[channel] == nullptr) {
+      last_process_status_.store(
+          static_cast<int>(brknam::audio::ProcessStatus::invalid_buffer),
+          std::memory_order_relaxed);
       clear_host_outputs(outputs, output_channels, nFrames);
       return;
     }
     core_outputs[static_cast<std::size_t>(channel)] = outputs[channel];
   }
 
-  static_cast<void>(processor_.process(
+  brknam::ui::publish_peak(
+      input_peak_, buffer_peak(inputs, input_channels, nFrames));
+
+  const auto process_status = processor_.process(
       core_inputs.data(), static_cast<std::size_t>(input_channels),
       core_outputs.data(), static_cast<std::size_t>(output_channels),
-      static_cast<std::size_t>(nFrames)));
+      static_cast<std::size_t>(nFrames));
+  last_process_status_.store(static_cast<int>(process_status),
+                             std::memory_order_relaxed);
+
+  brknam::ui::publish_peak(
+      output_peak_, buffer_peak(outputs, output_channels, nFrames));
 }
 
 void BRKNAM::OnReset() {
+  audio_callback_count_.store(0, std::memory_order_relaxed);
+  input_peak_.store(0.0F, std::memory_order_relaxed);
+  output_peak_.store(0.0F, std::memory_order_relaxed);
+  last_input_channels_.store(0, std::memory_order_relaxed);
+  last_output_channels_.store(0, std::memory_order_relaxed);
+  displayed_callback_count_ = 0;
+  stale_audio_ticks_ = 0;
+  displayed_input_peak_ = 0.0F;
+  displayed_output_peak_ = 0.0F;
   rebuild_model_worker();
 }
 
@@ -274,6 +362,60 @@ void BRKNAM::OnIdle() {
     reported_latency_samples_ = latency;
     SetLatency(latency);
   }
+
+  const auto callback_count =
+      audio_callback_count_.load(std::memory_order_relaxed);
+  if (callback_count == displayed_callback_count_) {
+    ++stale_audio_ticks_;
+  } else {
+    displayed_callback_count_ = callback_count;
+    stale_audio_ticks_ = 0;
+  }
+
+  const auto fresh_input = input_peak_.exchange(0.0F, std::memory_order_relaxed);
+  const auto fresh_output = output_peak_.exchange(0.0F, std::memory_order_relaxed);
+  displayed_input_peak_ =
+      std::max(fresh_input, displayed_input_peak_ * kMeterDecay);
+  displayed_output_peak_ =
+      std::max(fresh_output, displayed_output_peak_ * kMeterDecay);
+
+  const auto input_channels =
+      last_input_channels_.load(std::memory_order_relaxed);
+  const auto output_channels =
+      last_output_channels_.load(std::memory_order_relaxed);
+  const auto process_status = static_cast<brknam::audio::ProcessStatus>(
+      last_process_status_.load(std::memory_order_relaxed));
+
+  if (callback_count == 0 || stale_audio_ticks_ > PLUG_FPS) {
+#if defined(APP_API)
+    displayed_audio_status_ =
+        "AUDIO: OFF — click AUDIO SETUP and verify macOS Microphone permission";
+#else
+    displayed_audio_status_ =
+        "AUDIO: OFF — check the DAW track routing and input monitoring";
+#endif
+  } else if (process_status != brknam::audio::ProcessStatus::ok) {
+    displayed_audio_status_ = "AUDIO ERROR: ";
+    displayed_audio_status_ += brknam::audio::to_string(process_status);
+  } else {
+    displayed_audio_status_ = "AUDIO: RUNNING • ";
+    displayed_audio_status_ += std::to_string(input_channels);
+    displayed_audio_status_ += " IN / ";
+    displayed_audio_status_ += std::to_string(output_channels);
+    displayed_audio_status_ += " OUT • IN ";
+    displayed_audio_status_ +=
+        brknam::ui::format_peak_dbfs(displayed_input_peak_);
+    displayed_audio_status_ += " • OUT ";
+    displayed_audio_status_ +=
+        brknam::ui::format_peak_dbfs(displayed_output_peak_);
+
+    if (displayed_input_peak_ <= kSilenceThreshold) {
+      displayed_audio_status_ += " • no input detected";
+    } else if (displayed_output_peak_ <= kSilenceThreshold) {
+      displayed_audio_status_ += " • output silent: try RAW, then BYPASS";
+    }
+  }
+
   update_status_controls();
 }
 
@@ -330,7 +472,17 @@ void BRKNAM::update_status_controls() {
     if (displayed_generation_ == 0 ||
         status.requested_generation >= displayed_generation_) {
       displayed_generation_ = status.requested_generation;
-      displayed_status_ = brknam::audio::to_string(status.state);
+      if (status.state == brknam::audio::ModelLoadState::published) {
+        if (processor_.has_pending_model_change()) {
+          displayed_status_ = "Model ready — waiting for audio thread";
+        } else if (processor_.model_crossfade_active()) {
+          displayed_status_ = "Activating model";
+        } else {
+          displayed_status_ = "Model active";
+        }
+      } else {
+        displayed_status_ = brknam::audio::to_string(status.state);
+      }
       if (status.error_message.has_value()) {
         displayed_status_ += ": ";
         displayed_status_ += *status.error_message;
@@ -358,6 +510,12 @@ void BRKNAM::update_status_controls() {
   if (auto* control = ui->GetControlWithTag(kLatencyTag)) {
     if (auto* text = dynamic_cast<ITextControl*>(control)) {
       text->SetStrFmt(64, "Latency: %d samples", reported_latency_samples_);
+      text->SetDirty(false);
+    }
+  }
+  if (auto* control = ui->GetControlWithTag(kAudioStatusTag)) {
+    if (auto* text = dynamic_cast<ITextControl*>(control)) {
+      text->SetStr(displayed_audio_status_.c_str());
       text->SetDirty(false);
     }
   }
