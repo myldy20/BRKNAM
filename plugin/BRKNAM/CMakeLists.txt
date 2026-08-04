@@ -19,12 +19,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(brknam_vst3_sdk_source)
 
+set(BRKNAM_UI_FONT
+    "${IPLUG2_DIR}/Examples/IPlugEffect/resources/fonts/Roboto-Regular.ttf")
+if(NOT EXISTS "${BRKNAM_UI_FONT}")
+  message(FATAL_ERROR "Pinned iPlug2 UI font is missing: ${BRKNAM_UI_FONT}")
+endif()
+
 iplug_add_plugin(BRKNAM
   SOURCES
     BRKNAM.cpp
     BRKNAM.h
     config.h
     resources/resource.h
+  RESOURCES
+    ${BRKNAM_UI_FONT}
   FORMATS APP VST3 AU
   LINK BRKNAM::nam_adapter
   DEFINES SAMPLE_TYPE_FLOAT
