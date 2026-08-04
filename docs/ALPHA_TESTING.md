@@ -15,6 +15,8 @@ This is an **unsigned development build** intended for functional testing. It is
 - automatic model-rate resampling and host latency reporting;
 - click-reduced background model replacement.
 
+`0.1.0-alpha.2` also packages the UI font correctly, disables the unsafe native knob-value prompt that crashed the macOS standalone build, and adds an explicit audio signal-flow hint to the interface.
+
 ## Known limitations
 
 - There is no IR loader yet. Amp-only captures will usually need a separate cab/IR plugin after BRKNAM. Full-rig or cab-inclusive NAM captures can be auditioned directly.
@@ -45,6 +47,24 @@ killall -9 AudioComponentRegistrar 2>/dev/null || true
 ```
 
 In Ableton Live, enable VST3 and/or Audio Units in **Settings → Plug-Ins**, then run a full rescan if BRKNAM does not appear immediately.
+
+## Standalone audio setup
+
+The standalone application processes live audio; it does not generate a test tone by itself.
+
+On macOS, open **BRKNAM → Preferences…** from the system menu bar and choose:
+
+- the audio input device or interface receiving the guitar/DI signal;
+- the input channel connected to the instrument;
+- the audio output device or interface;
+- the output channels feeding headphones or monitors;
+- a sample rate and buffer size.
+
+A practical first setup is 48 kHz, 128 or 256 samples, mono input from the interface, and stereo output to the same interface. The on-screen signal flow is:
+
+`INPUT DEVICE → INPUT TRIM → NAM MODEL → OUTPUT TRIM → OUTPUT DEVICE`
+
+When BRKNAM runs as VST3 or AU, device selection is handled by the DAW. Put BRKNAM on an audio track, route the guitar/DI input to that track, enable input monitoring, and route the track to the desired output.
 
 ## Windows installation
 
