@@ -6,6 +6,14 @@
 
 #include "IPlug_include_in_plug_hdr.h"
 
+#if defined(APP_API)
+#if defined(OS_MAC)
+#include "IPlugSWELL.h"
+#elif defined(OS_WIN)
+#include <windows.h>
+#endif
+#endif
+
 #include "brknam/audio/ModelLoadWorker.hpp"
 #include "brknam/audio/NamCoreModel.hpp"
 #include "brknam/audio/OneSlotProcessor.hpp"
