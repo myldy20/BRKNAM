@@ -19,6 +19,8 @@ This is an **unsigned development build** intended for functional testing. It is
 
 `0.1.0-alpha.3` adds a direct `AUDIO SETUP` button in the standalone app, reports whether the realtime audio callback is running, shows connected input/output channel counts and live IN/OUT peak levels, and distinguishes a model that is merely prepared from one actually activated by the audio thread.
 
+`0.1.0-alpha.4` fixes the pinned iPlug2 standalone host for one-channel CoreAudio inputs, selects a valid common sample rate when the saved rate is unavailable, and opens the selected hardware input channel. The standalone contract is now one selected input channel processed to stereo output; VST3 and AU retain mono/stereo host routing.
+
 ## Known limitations
 
 - There is no IR loader yet. Amp-only captures will usually need a separate cab/IR plugin after BRKNAM. Full-rig or cab-inclusive NAM captures can be auditioned directly.
@@ -57,12 +59,14 @@ The standalone application processes live audio; it does not generate a test ton
 Click **AUDIO SETUP** inside BRKNAM, or open **BRKNAM → Preferences…** from the macOS menu bar, then choose:
 
 - the audio input device or interface receiving the guitar/DI signal;
-- the input channel connected to the instrument;
+- `Input 1 (L)`: the single hardware channel BRKNAM should process;
 - the audio output device or interface;
-- the output channels feeding headphones or monitors;
+- the stereo output pair;
 - a sample rate and buffer size.
 
-A practical first setup is 48 kHz, 128 or 256 samples, mono input from the interface, and stereo output to the same interface. The on-screen signal flow is:
+`Input 2 (R)` remains visible in the generic iPlug2 preferences dialog but is not used by the BRKNAM standalone processor. Plug-in formats still accept host-provided mono or stereo input.
+
+A practical first setup is 48 kHz, 128 or 256 samples, mono input from the interface, and stereo output to the same interface. For initial fault isolation, prefer the MacBook speakers or the same wired audio interface over a Bluetooth output device. The on-screen signal flow is:
 
 `INPUT DEVICE → INPUT TRIM → NAM MODEL → OUTPUT TRIM → OUTPUT DEVICE`
 
