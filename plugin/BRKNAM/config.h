@@ -20,9 +20,14 @@
 
 #define SHARED_RESOURCES_SUBPATH "BRKNAM"
 
-// BRKNAM's Core is mono internally. One or two host inputs are averaged and
-// the processed mono result is written to one or two host outputs.
+// The standalone product is a guitar/DI processor: one selectable hardware
+// input is processed and broadcast to stereo output. Plug-in formats retain
+// the wider host-routing contract and may average one or two host inputs.
+#if defined(APP_API)
+#define PLUG_CHANNEL_IO "1-2"
+#else
 #define PLUG_CHANNEL_IO "1-1 1-2 2-2"
+#endif
 
 #define PLUG_LATENCY 0
 #define PLUG_TYPE 0
