@@ -81,7 +81,7 @@ lib="$(find /lib /usr/lib -name 'libstdc++.so.6*' -print -quit 2>/dev/null)"
 if [ -n "$lib" ]; then strings "$lib" 2>/dev/null | grep '^GLIBCXX_' | sort -V | tail -1; else echo missing; fi
 echo "SCANNER:"
 find /data/.config/Ableton -maxdepth 2 -name PluginScanner.txt -type f 2>/dev/null | while read -r log; do
-    grep -aE 'VST3: found: NAMix|NAMix.*(error|failed)|GLIBC_2\\.' "$log" 2>/dev/null | tail -8
+    grep -aE 'VST3: found: NAMix|NAMix.*(error|failed)|GLIBC_2\.' "$log" 2>/dev/null | tail -8
 done
 """
 
