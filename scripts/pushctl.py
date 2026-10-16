@@ -11,7 +11,8 @@ import tempfile
 import uuid
 
 STAGE_DIR = "/data/.vst3"
-MODELS_DIR = "/data/brknam/models"\nPRESETS_DIR = "/data/Music/Ableton/User Library/BRKNAM Presets"
+MODELS_DIR = "/data/brknam/models"
+PRESETS_DIR = "/data/Music/Ableton/User Library/BRKNAM Presets"
 
 class StageError(ValueError):
     pass
