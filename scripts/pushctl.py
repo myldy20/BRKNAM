@@ -121,16 +121,16 @@ def upload_model(args):
     print(f"Copied model to {target}. No activation or audio changes.")
 
 def upload_ir(args):
-    ir = pathlib.Path(args.model).expanduser()
+    ir = pathlib.Path(args.ir).expanduser()
     if not ir.is_file() or ir.suffix.lower() != ".wav":
-        raise StageError("expected an existing .nam model")
+        raise StageError("expected an existing .wav IR")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,149}\.wav", ir.name, re.IGNORECASE):
         raise StageError("use a simple ASCII .wav filename (letters, numbers, _.- and spaces)")
     import shlex
     target = f"{MODELS_DIR}/{ir.name}"
     ssh(args, f"set -e; mkdir -p {shlex.quote(MODELS_DIR)}; test ! -e {shlex.quote(target)}")
     tmp = f"/data/.brknam-upload-{uuid.uuid4().hex[:12]}"
-    scp(args, model, tmp)
+    scp(args, ir, tmp)
     ssh(args, f"set -e; test ! -e {shlex.quote(target)}; mv {tmp} {shlex.quote(target)}")
     print(f"Copied IR to {target}. No activation or audio changes.")
 
@@ -161,6 +161,10 @@ def main(argv=None):
             command.add_argument("--archive", required=True)
         if name == "upload-model":
             command.add_argument("--model", required=True)
+        if name == "upload-ir":
+            command.add_argument("--ir", required=True)
+        if name == "upload-preset":
+            command.add_argument("--preset", required=True)
     args = parser.parse_args(argv)
     try:
         {"doctor": doctor, "stage": stage, "upload-model": upload_model, "upload-ir": upload_ir, "upload-preset": upload_preset}[args.command](args)
