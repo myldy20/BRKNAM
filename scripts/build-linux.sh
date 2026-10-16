@@ -23,6 +23,14 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   exit 1
 fi
 
+if [[ -z "${CXX:-}" ]] && command -v g++-12 >/dev/null; then
+  export CXX=g++-12 CC=gcc-12
+fi
+if [[ "${CXX:-}" == "" ]]; then
+  echo "Set CXX to GCC 12+ (e.g. export CXX=g++-12 CC=gcc-12)." >&2
+  exit 1
+fi
+
 mkdir -p "$ROOT/.build" "$DIST"
 if [[ ! -d "$SRC/.git" ]]; then
   git clone https://github.com/rations/NAMix.git "$SRC"
