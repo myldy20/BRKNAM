@@ -35,7 +35,7 @@ This writes into `/data/brknam/models` without overwriting existing files.
 
 Stock Push Live has its VST3 **system-path scan disabled**. [The independent Push Hack research](https://github.com/federico-pepe/ableton-push-hack/blob/main/docs/vst3-on-push3.md) documents a binary `Preferences.cfg` field named `AreSystemPathsEnabled`; enabling it requires stopping Live, backing up the original file, a **version-checked binary edit**, and restarting the stack. Do not apply that recipe blindly against a different Live version: restore the backed-up preferences if its layout differs. BRKNAM intentionally does not automate this high-risk operation in its first phase.
 
-Once scanning has been explicitly enabled, check `PluginScanner.txt` for `VST3: found: NAMix` or a clear error. If the plugin fails to scan, check glibc/libstdc++ version and shared libraries; stop rather than disabling safety checks.
+Once scanning has been explicitly enabled, check `PluginScanner.txt` for `VST3: found: NAMix` or a clear error. If the plugin fails to scan, compare GLIBC and GLIBCXX versions with BUILD-INFO.txt, then check shared libraries; stop rather than disabling safety checks.
 
 ## Instantiate effect and load a model
 
