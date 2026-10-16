@@ -120,6 +120,21 @@ def upload_model(args):
     ssh(args, f"set -e; test ! -e {shlex.quote(target)}; mv {tmp} {shlex.quote(target)}")
     print(f"Copied model to {target}. No activation or audio changes.")
 
+def upload_ir(args):
+    ir = pathlib.Path(args.model).expanduser()
+    if not ir.is_file() or ir.suffix.lower() != ".wav":
+        raise StageError("expected an existing .nam model")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,149}\.wav", ir.name, re.IGNORECASE):
+        raise StageError("use a simple ASCII .wav filename (letters, numbers, _.- and spaces)")
+    import shlex
+    target = f"{MODELS_DIR}/{ir.name}"
+    ssh(args, f"set -e; mkdir -p {shlex.quote(MODELS_DIR)}; test ! -e {shlex.quote(target)}")
+    tmp = f"/data/.brknam-upload-{uuid.uuid4().hex[:12]}"
+    scp(args, model, tmp)
+    ssh(args, f"set -e; test ! -e {shlex.quote(target)}; mv {tmp} {shlex.quote(target)}")
+    print(f"Copied IR to {target}. No activation or audio changes.")
+
+
 def upload_preset(args):
     import shlex
     preset = pathlib.Path(args.preset).expanduser()
@@ -137,7 +152,7 @@ def upload_preset(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("doctor", "stage", "upload-model", "upload-preset"):
+    for name in ("doctor", "stage", "upload-model", "upload-ir", "upload-preset"):
         command = sub.add_parser(name)
         command.add_argument("--host", default="push.local")
         command.add_argument("--user", default="ableton")
@@ -148,7 +163,7 @@ def main(argv=None):
             command.add_argument("--model", required=True)
     args = parser.parse_args(argv)
     try:
-        {"doctor": doctor, "stage": stage, "upload-model": upload_model, "upload-preset": upload_preset}[args.command](args)
+        {"doctor": doctor, "stage": stage, "upload-model": upload_model, "upload-ir": upload_ir, "upload-preset": upload_preset}[args.command](args)
     except (StageError, OSError, subprocess.CalledProcessError) as exc:
         print(f"BRKNAM: {exc}", file=sys.stderr)
         return 1
