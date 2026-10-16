@@ -46,6 +46,7 @@ patch='''
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set_target_properties(neural_tilde PROPERTIES SUFFIX ".mxl_x86_64")
+  target_link_options(neural_tilde PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 '''
 if patch not in s:s+=patch
@@ -68,7 +69,7 @@ NEURAL="$(find "$BUILD" -name 'neural~.mxl_x86_64' -type f -print -quit)"
 
 DEVKIT="$SOURCE/deps/min-devkit/source/min-api"
 HDR="$DEVKIT/max-sdk-base/c74support"
-"$CXX" -std=c++17 -O2 -fPIC -shared \
+"$CXX" -std=c++17 -O2 -fPIC -shared -static-libstdc++ -static-libgcc \
   -DC74_MIN_API -DC74_NO_MIN_LIB_SUBMODULE \
   -I"$DEVKIT/include" \
   -I"$HDR/max-includes" -I"$HDR/msp-includes" \
@@ -92,18 +93,9 @@ cp "$SOURCE/LICENSE" "$ARTIFACT/LICENSES/neural-LICENSE"
 cp "$DSPTOOL/LICENSE" "$ARTIFACT/LICENSES/AudioDSPTools-LICENSE"
 cp "$ROOT/LICENSE" "$ARTIFACT/LICENSES/BRKNAM-LICENSE"
 cp "$ROOT/NOTICE" "$ARTIFACT/LICENSES/BRKNAM-NOTICE"
-{
-  echo "BRKNAM experimental Linux Max external build; upstream neural_tilde $REV"
-  echo "Compiler: $("$CXX" --version | head -1)"
-  for b in "$ARTIFACT"/externals/*.mxl_x86_64; do
-    echo
-    echo "$(basename "$b")"
-    for prefix in GLIBC GLIBCXX CXXABI; do
-      echo "$prefix requirement:"
-      objdump -T "$b" 2>/dev/null | grep -oE "${prefix}_[0-9]+(\\.[0-9]+)+" | sort -Vu | tail -1 || true
-    done
-  done
-} > "$ARTIFACT/ABI-REPORT.txt"
+# Fail closed against the Push's glibc 2.35 / libstdc++ 6.0.29.
+python3 "$ROOT/scripts/check-push-abi.py" "$NEURAL" "$PROBE" > "$ARTIFACT/ABI-REPORT.txt"
+cat "$ARTIFACT/ABI-REPORT.txt"
 tar -czf "$ZIP" -C "$ARTIFACT" externals patchers LICENSES ABI-REPORT.txt
 echo "Built: $ZIP"
 echo "This binary is NOT hardware-validated yet."
