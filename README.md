@@ -8,7 +8,7 @@ This is a deliberate proof of concept. The resulting effect identifies itself as
 
 ## Why VST3?
 
-[Ableton Push Hack's VST3 research](https://github.com/federico-pepe/ableton-push-hack/blob/main/docs/vst3-on-push3.md) demonstrates that Push's bundled Live can scan and instantiate Linux x86_64 VST3 instruments and effects through a hidden system-path scanning setting. Third-party C++ Max for Live externals, including the recent NAM loaders, have not worked on Push 3 Standalone. VST3 has the most concrete device-level evidence, but this is **unsupported by Ableton**.
+[Ableton Push Hack's VST3 research](https://github.com/federico-pepe/ableton-push-hack/blob/main/docs/vst3-on-push3.md) demonstrates that Push's bundled Live can scan and instantiate Linux x86_64 VST3 instruments and effects through a hidden system-path scanning setting. Recent NAM Max for Live devices have **not yet been demonstrated working on Push 3 Standalone**, mainly because their third-party C++ externals ship for macOS/Windows rather than the Push Linux runtime. This is **not a ban on native C++**: Ableton's own [Max for Live production guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md) explicitly state that third-party externals must be compiled separately for Push 3 Linux. The Push filesystem already contains first-party Linux `.mxl_x86_64` externals. A Linux-built `neural~` external and Max for Live device are a **viable second route**, potentially preferable to hidden VST3 scanning. VST3 has the clearest recent end-to-end third-party proof of concept but is **unsupported by Ableton**.
 
 ## Quick start
 
