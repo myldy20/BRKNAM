@@ -62,6 +62,11 @@ python3 scripts/pushctl.py upload-preset \
   --host push.local --user ableton --key ~/.ssh/push3_rsa
 ```
 
-Upload the corresponding `my A2 lite.nam` and `cab 212.wav` assets to `/data/brknam/models` (the `upload-model` command transfers `.nam`; IR transfer is still manual). Live indexes `.vstpreset` files in the User Library; Browser Bridge can address them by plugin/preset name.
+Upload the corresponding `my A2 lite.nam` and `cab 212.wav` assets to `/data/brknam/models`:
+
+```bash
+python3 scripts/pushctl.py upload-model --model "/path/to/my A2 lite.nam" --key ~/.ssh/push3_rsa
+python3 scripts/pushctl.py upload-ir --ir "/path/to/cab 212.wav" --key ~/.ssh/push3_rsa
+``` Live indexes `.vstpreset` files in the User Library; Browser Bridge can address them by plugin/preset name.
 
 **The binary format is covered by offline tests but the resulting preset is not yet confirmed to load NAMix and its model on Push 3.** This is the next hardware validation gate. A `.vstpreset` file holds absolute paths and will not be portable to a different filesystem layout without rewriting those paths.
