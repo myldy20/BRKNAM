@@ -57,6 +57,48 @@ python3 scripts/push-m4l.py stage \
 
 The example root is **not yet confirmed active**. The tool rejects other directories, path-traversal archives, unexpected file types, oversized payloads and binary ABI reports without PASS, and refuses to overwrite an existing BRKNAM package. Without `--confirm-stage` the command contacts no remote host and changes nothing. Only after validating the active root and independently backing up relevant user files should you add `--confirm-stage` to perform an opt-in transfer. The script does not edit Max search paths, restart Live or install an `.amxd`.
 
+
+## Real-device probe package successfully staged (2026-10-16)
+
+The owner staged and confirmed the two ELF modules in
+`/data/.local/share/Max 9/Packages/BRKNAM/externals/`:
+`brknam_probe~.mxl_x86_64` (2.1 MB) and `neural~.mxl_x86_64` (5.1 MB).
+**The Max runtime has not yet loaded either module**.
+
+### Generate a test Audio Effect without editing Max on the Mac
+
+The repository now contains an offline Audio Effect generator derived from the
+**ampF framing actually used by Ableton's sample MaxDevTools .amxd** (meta value
+0 and a NUL-terminated .maxpat JSON). Generate on the Mac after pulling PR #21:
+
+```sh
+git -C /tmp/brknam-push3 pull --ff-only
+python3 /tmp/brknam-push3/scripts/build-probe-amxd.py \
+  --output ~/Downloads/"BRKNAM Probe.amxd"
+```
+
+Alternatively download the `.amxd` bundled in the newer GitHub Actions build.
+Transfer that file using **Live's browser**: connect/pair Push, add the
+`.amxd` to the computer's User Library first, and drag it onto the Push entry
+under Places. Use a separate empty audio track or throwaway set. If Live on the
+Mac reports a missing `brknam_probe~` object, that is expected because the
+current module is Linux-only; the test itself belongs on Push.
+
+The diagnostic device sends a `ping` from `live.thisdevice` after
+initialization, and connects its status outlet to `print BRKNAM_PROBE`.
+A successful Linux module load should therefore produce a ready notification.
+The left audio channel passes through the native C++ object; right channel is
+a dry reference. Start at low volume.
+
+If Max cannot discover `brknam_probe~`, examine its own log for "no such
+object", "missing or incompatible", or "undefined symbol". A successful
+installation directory by itself does not prove Max's search-path discovery.
+Do not alter `/opt/push3` to force a load; revisit the Max package search path
+or bundle the Linux external as a device dependency.
+
+**Offline-generated .amxd is not yet certified as a functioning Live device.
+Keep any test to a disposable Live Set.**
+
 ## Phase C: prove the external is discoverable
 
 Work with a copy of the diagnostic `.amxd` device, keep input/output gains low, and back up User Library. Do **not** overwrite pre-existing externals. Use the exact user-writable Max package path discovered on the device and a uniquely named BRKNAM package. If the Max device is frozen, verify the included Linux file is actually the one loaded.

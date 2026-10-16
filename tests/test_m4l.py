@@ -8,8 +8,9 @@ class M4LSmoke(unittest.TestCase):
         p=json.loads((ROOT/"patchers/BRKNAM Probe.maxpat").read_text())["patcher"]
         boxes={b["box"]["id"]:b["box"].get("text","") for b in p["boxes"]}
         self.assertIn("brknam_probe~",boxes.values())
-        self.assertIn("plugin~ 2",boxes.values())
-        self.assertIn("plugout~ 2",boxes.values())
+        self.assertIn("live.thisdevice",boxes.values())
+        self.assertIn("plugin~",boxes.values())
+        self.assertIn("plugout~",boxes.values())
         edges={tuple((tuple(x["patchline"]["source"]),tuple(x["patchline"]["destination"]))) for x in p["lines"]}
         self.assertIn((("obj-1",0),("obj-2",0)),edges)
         self.assertIn((("obj-2",0),("obj-3",0)),edges)
