@@ -32,7 +32,7 @@ git -C "$SRC" checkout --detach "$REF"
 git -C "$SRC" submodule update --init --recursive
 [[ "$(git -C "$SRC" rev-parse HEAD)" == "$REF" ]] || { echo "upstream commit mismatch" >&2; exit 1; }
 
-cmake -S "$SRC" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release
+cmake -S "$SRC" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release \\\n  -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON
 cmake --build "$BUILD" --target NAMix --parallel "${JOBS:-2}"
 
 BUNDLE="$(find "$BUILD" -type d -name NAMix.vst3 -print -quit)"
