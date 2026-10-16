@@ -1,0 +1,43 @@
+name: Push 3 Linux VST3 proof of concept
+
+on:
+  push:
+    branches: [feat/push3-nam-vst3]
+  pull_request:
+    paths:
+      - ".github/workflows/push3-linux.yml"
+      - "scripts/**"
+      - "tests/**"
+      - "docs/**"
+      - "README.md"
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python staging safety tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Shell syntax
+        run: bash -n scripts/build-linux.sh
+      - name: Install pinned-build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential cmake ninja-build pkg-config \
+            libcairo2-dev libfreetype6-dev libfontconfig1-dev libx11-dev \
+            libjack-jackd2-dev binutils
+      - name: Build NAMix VST3 for Push ABI
+        env:
+          JOBS: "2"
+        run: bash scripts/build-linux.sh
+      - name: Validate archive structure
+        run: |
+          test -f dist/BRKNAM-Push3-NAMix-0.9.0-linux-x86_64.tar.gz
+          tar -tzf dist/BRKNAM-Push3-NAMix-0.9.0-linux-x86_64.tar.gz | grep -F "NAMix.vst3/Contents/x86_64-linux/NAMix.so"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BRKNAM-Push3-NAMix-0.9.0-linux-x86_64
+          path: dist/*.tar.gz
+          if-no-files-found: error
