@@ -58,6 +58,9 @@ if [[ "$(printf '%s\n' '2.35' "$MAX_GLIBC" | sort -V | tail -1)" != "2.35" ]]; t
   exit 1
 fi
 
+MAX_GLIBCXX="$(objdump -T "$SO" | grep -oE 'GLIBCXX_[0-9]+\\.[0-9]+(\\.[0-9]+)?' | sed 's/GLIBCXX_//' | sort -Vu | tail -1 || true)"
+[[ -n "$MAX_GLIBCXX" ]] || { echo "unable to inspect GLIBCXX requirements" >&2; exit 1; }
+
 rm -rf "$STAGE"
 mkdir -p "$STAGE/LICENSES"
 cp -a "$BUNDLE" "$STAGE/NAMix.vst3"
@@ -69,7 +72,7 @@ Upstream: https://github.com/rations/NAMix
 NAMix commit: $REF
 NAMix version: $VERSION
 Target: Linux x86_64, Ubuntu 22.04 / glibc <= 2.35
-Maximum GLIBC symbol requirement: $MAX_GLIBC
+Maximum GLIBC symbol requirement: $MAX_GLIBC\nMaximum GLIBCXX symbol requirement: $MAX_GLIBCXX
 Status: not verified on physical Push 3
 EOF
 tar -C "$STAGE" -czf "$ARCHIVE" NAMix.vst3 LICENSES BUILD-INFO.txt
