@@ -35,7 +35,7 @@ test -f "$DSPTOOL/dsp/ResamplingContainer/ResamplingContainer.h" || {
 # Ubuntu 22.04's GCC 11/libstdc++ lacks C++20 atomic<shared_ptr>.
 # Upstream's CMake currently pins C++17 and Windows/macOS target output.
 # Modify only this throwaway pinned checkout for Linux build.
-python3 - "$SOURCE/CMakeLists.txt" <<'PY'
+python3 - "$SOURCE/CMakeLists.txt" "$DSPTOOL/dsp/ResamplingContainer/ResamplingContainer.h" <<'PY'
 import pathlib,sys
 p=pathlib.Path(sys.argv[1])
 s=p.read_text()
@@ -52,6 +52,14 @@ if patch not in s:s+=patch
 # Add the missing resampling header from the MIT-licensed pinned AudioDSPTools checkout.
 s += chr(10) + 'target_include_directories(neural_tilde SYSTEM PRIVATE "' + str(p.parent.parent / 'AudioDSPTools/dsp') + '")' + chr(10)
 p.write_text(s)
+# GCC rejects the old recursive unqualified type alias in AudioDSPTools.
+hdr = pathlib.Path(sys.argv[2])
+source = hdr.read_text()
+old = "using LanczosResampler = LanczosResampler<T, NCHANS, A>;"
+new = "using LanczosResampler = ::dsp::LanczosResampler<T, NCHANS, A>;"
+if old not in source:
+    raise SystemExit("Unexpected AudioDSPTools ResamplingContainer layout")
+hdr.write_text(source.replace(old, new, 1))
 PY
 cmake -S "$SOURCE" -B "$BUILD" -DSUPERBUILD=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
 cmake --build "$BUILD" --target neural_tilde --parallel "${JOBS:-2}"
