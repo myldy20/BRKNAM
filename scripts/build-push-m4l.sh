@@ -50,7 +50,7 @@ endif()
 '''
 if patch not in s:s+=patch
 # Add the missing resampling header from the MIT-licensed pinned AudioDSPTools checkout.
-s+= '\\n' + 'target_include_directories(neural_tilde SYSTEM PRIVATE "' + str(p.parent.parent / 'AudioDSPTools/dsp') + '")\\n'
+s += chr(10) + 'target_include_directories(neural_tilde SYSTEM PRIVATE "' + str(p.parent.parent / 'AudioDSPTools/dsp') + '")' + chr(10)
 p.write_text(s)
 PY
 cmake -S "$SOURCE" -B "$BUILD" -DSUPERBUILD=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
