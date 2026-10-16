@@ -76,6 +76,9 @@ echo "ARCH:"; uname -m
 echo "LIBC:"; (getconf GNU_LIBC_VERSION || true) 2>/dev/null
 echo "LIVE:"; find /data/.config/Ableton -maxdepth 1 -name 'Live *' -type d 2>/dev/null | tail -3
 echo "VST3:"; if [ -f /data/.vst3/NAMix.vst3/Contents/x86_64-linux/NAMix.so ]; then echo staged; else echo absent; fi
+echo "LIBSTDCXX:"
+lib="$(find /lib /usr/lib -name 'libstdc++.so.6*' -print -quit 2>/dev/null)"
+if [ -n "$lib" ]; then strings "$lib" 2>/dev/null | grep '^GLIBCXX_' | sort -V | tail -1; else echo missing; fi
 echo "SCANNER:"
 find /data/.config/Ableton -maxdepth 2 -name PluginScanner.txt -type f 2>/dev/null | while read -r log; do
     grep -aE 'VST3: found: NAMix|NAMix.*(error|failed)|GLIBC_2\\.' "$log" 2>/dev/null | tail -8
