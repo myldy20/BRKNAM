@@ -121,7 +121,7 @@ def upload_preset(args):
     preset = pathlib.Path(args.preset).expanduser()
     if not preset.is_file() or preset.suffix.lower() != ".vstpreset":
         raise StageError("expected an existing .vstpreset file")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. ()-]{0,149}\\.vstpreset", preset.name, re.IGNORECASE):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. ()-]{0,149}\.vstpreset", preset.name, re.IGNORECASE):
         raise StageError("use a simple ASCII .vstpreset filename")
     target = f"{PRESETS_DIR}/{preset.name}"
     tmp = f"/data/.brknam-upload-{uuid.uuid4().hex[:12]}"
