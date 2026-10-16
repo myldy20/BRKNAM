@@ -1,8 +1,6 @@
 name: Push 3 Linux VST3 proof of concept
 
 on:
-  push:
-    branches: [feat/push3-nam-vst3]
   pull_request:
     paths:
       - ".github/workflows/push3-linux.yml"
