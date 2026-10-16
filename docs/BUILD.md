@@ -10,10 +10,10 @@ Use Ubuntu 22.04 x86_64 (glibc 2.35). On Ubuntu 22.04:
 sudo apt-get update
 sudo apt-get install -y git build-essential cmake ninja-build pkg-config \
   libcairo2-dev libfreetype6-dev libfontconfig1-dev libx11-dev \
-  libjack-jackd2-dev binutils
+  libjack-jackd2-dev binutils gcc-12 g++-12
 ```
 
-CMake >= 3.25, a C++20-capable compiler and network access to clone NAMix and its submodules are required. For Apple Silicon use an Ubuntu 22.04 `linux/amd64` container or download the GitHub Actions artifact; macOS binaries cannot be loaded on Push.
+CMake >= 3.25, GCC 12+ (GCC 11's libstdc++ cannot compile std::atomic<std::shared_ptr>) and network access to clone NAMix and its submodules are required. For Apple Silicon use an Ubuntu 22.04 `linux/amd64` container or download the GitHub Actions artifact; macOS binaries cannot be loaded on Push.
 
 ```bash
 ./scripts/build-linux.sh
