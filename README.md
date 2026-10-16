@@ -1,94 +1,46 @@
-# BRKNAM
+# BRKNAM — Push 3 Standalone NAM experiment
 
-**Minimal open-source NAM librarian and DAW player.**
+**Status: development prototype; not tested on an actual Push yet.**
 
-BRKNAM is a local-first tool for finding, auditioning, organizing, and playing Neural Amp Modeler captures without forcing an account, a cloud library, or a giant amp-suite interface.
+BRKNAM is being rebuilt as a guitar/bass amplifier processor for Ableton Push 3 Standalone. The first milestone produces a **Linux x86_64 VST3 audio effect** using an **unmodified, commit-pinned [NAMix](https://github.com/rations/NAMix)** upstream, and provides safe tooling to inspect a Push and stage the plugin for Live's scanner.
 
-> Find the tone. Skip the bullshit.
+This is a deliberate proof of concept. The resulting effect identifies itself as **NAMix**. It is **not** a finished BRKNAM-branded plugin, model browser, or Push-native UI.
 
-## Status
+## Why VST3?
 
-**E1 — Local library foundation is complete.**
+[Ableton Push Hack's VST3 research](https://github.com/federico-pepe/ableton-push-hack/blob/main/docs/vst3-on-push3.md) demonstrates that Push's bundled Live can scan and instantiate Linux x86_64 VST3 instruments and effects through a hidden system-path scanning setting. Recent NAM Max for Live devices have **not yet been demonstrated working on Push 3 Standalone**, mainly because their third-party C++ externals ship for macOS/Windows rather than the Push Linux runtime. This is **not a ban on native C++**: Ableton's own [Max for Live production guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md) explicitly state that third-party externals must be compiled separately for Push 3 Linux. The Push filesystem already contains first-party Linux `.mxl_x86_64` externals. A Linux-built `neural~` external and Max for Live device are a **viable second route**, potentially preferable to hidden VST3 scanning. VST3 has the clearest recent end-to-end third-party proof of concept but is **unsupported by Ableton**.
 
-BRKNAM can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+## Quick start
 
-Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move. Saved searches and stable JSON CLI output are included.
+On a Linux build host (or in an Ubuntu 22.04 x86_64 VM/container), install the dependencies described in [docs/BUILD.md](docs/BUILD.md), then:
 
-**E2 — One-slot NAM player is feature-complete for automated validation and is entering manual alpha testing.**
-
-The current product shell builds as a Windows/macOS standalone application, VST3, and macOS Audio Unit. It uses the pinned NeuralAmpModelerCore, supports representative A1/A2 models, loads models outside the audio thread, performs click-reduced block-boundary replacement, adapts model sample rates, and reports processing latency to the host. Steinberg VST3 Validator, Apple `auval`, cross-platform reference tests, and concurrent switching stress tests pass in CI.
-
-Unsigned downloadable test packages are produced by the **Alpha packages** GitHub Actions workflow. See [the alpha test guide](docs/ALPHA_TESTING.md) before installing them.
-
-## Product principles
-
-- **Local-first:** existing `.nam` and IR files remain usable offline and in place.
-- **No mandatory account:** online providers are optional adapters, not the product core.
-- **Fast auditioning:** compare many captures against the same recorded DI loop.
-- **Small native UI:** a practical browser/player, not another virtual showroom.
-- **Realtime-safe audio:** no file I/O, network calls, locks, or allocation in the audio callback.
-- **Open formats:** portable presets and an inspectable local index.
-
-## Build the core and tools
-
-Requirements: CMake 3.24+, a C++20 compiler, and internet access during the first default configure so CMake can download the pinned SQLite amalgamation. A compatible system SQLite can be selected explicitly.
-
-```sh
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+```bash
+./scripts/build-linux.sh
+python3 -m unittest discover -s tests -v
+python3 scripts/pushctl.py doctor --host push.local --user ableton --key ~/.ssh/push3_rsa
+python3 scripts/pushctl.py stage --archive dist/BRKNAM-Push3-NAMix-0.9.0-linux-x86_64.tar.gz --host push.local --user ableton --key ~/.ssh/push3_rsa
 ```
 
-Use a system SQLite installation instead:
+**Stage is fail-closed:** it only copies a plugin into `/data/.vst3`, refuses to overwrite an existing installation, and never restarts Live or edits its preferences. Staging alone does not make the plugin usable.
 
-```sh
-cmake -S . -B build -DBRKNAM_USE_SYSTEM_SQLITE=ON
-```
+To scan and actually load the effect, follow [docs/PUSH3-BRINGUP.md](docs/PUSH3-BRINGUP.md). Those operations are manual and require a full backup and a maintenance window. Never test this on Push during a performance.
 
-On multi-config generators, add `--config Release` when building and `-C Release` when testing.
+## Scope
 
-### Current tools
+- Native Linux x86_64 effect; NAM/A2 loading is provided by upstream NAMix.
+- NAMix already includes gate, tone stack, cabinet IR and a model/IR path state interface.
+- Build pinned to Ubuntu 22.04 / glibc 2.35, with ABI and archive checks.
+- Read-only SSH diagnostics; non-destructive plugin, model, and experimental preset staging.\n- Offline NAMix `.vstpreset` generator for model/IR paths (pending Push validation).
+- Hardware sound, CPU load, latency, preset recall and Push encoder mapping: **still unverified**.
 
-```sh
-./build/brknam-scan /path/to/your/NAM/library
-./build/brknam-inspect /path/to/model.nam
+## Former BRKNAM
 
-./build/brknam-library library.sqlite3 index /path/to/your/NAM/library
-./build/brknam-library library.sqlite3 search "5150 crunch"
-./build/brknam-library library.sqlite3 hash 42
-./build/brknam-library library.sqlite3 duplicates 42
+The previous macOS/Windows NAM library, iPlug2 plug-in, native DSP adapter, tests and documentation have been preserved in Git history and in the `archive/brknam-desktop-20260804` branch. They were not silently copied into this different product architecture. We may later reuse the mature model-swapping and resampling components in a proper BRKNAM VST3.
 
-./build/brknam-library library.sqlite3 save-search "High gain" "5150 crunch" 0 100
-./build/brknam-library library.sqlite3 list-searches
-./build/brknam-library library.sqlite3 run-search 1
-```
+Tracked development: [Push 3 end-to-end validation issue](https://github.com/myldy20/BRKNAM/issues/19).
 
-Put `--json` before the database path to receive stable machine-readable output and diagnostics:
+## Licenses and credits
 
-```sh
-./build/brknam-library --json library.sqlite3 search "5150 crunch"
-```
+Project code and tools: GPL-3.0-or-later; see [LICENSE](LICENSE) and [NOTICE](NOTICE). NAMix is an independent MIT-licensed upstream, compiled without local changes. The build downloads dependencies; no NAMix binaries or proprietary Push firmware are committed here. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
-## Build the plugin shell
-
-The optional product build fetches the pinned NeuralAmpModelerCore, iPlug2, and official Steinberg VST3 SDK sources.
-
-```sh
-cmake -S . -B build-plugin \
-  -DBRKNAM_ENABLE_IPLUG2=ON \
-  -DBRKNAM_BUILD_TESTS=OFF \
-  -DBRKNAM_BUILD_TOOLS=OFF \
-  -DIPLUG_DEPLOY_PLUGINS=OFF \
-  -DCMAKE_BUILD_TYPE=Release
-cmake --build build-plugin --config Release
-```
-
-Current targets are Windows/macOS standalone, VST3, and macOS AU. Later targets include CLAP and Linux packaging.
-
-See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), [product definition](docs/PRODUCT.md), and [alpha test guide](docs/ALPHA_TESTING.md).
-
-## Licensing
-
-BRKNAM is licensed under **GNU GPL v3 or later**. Copyright and origin notices must be preserved as described in [`NOTICE`](NOTICE).
-
-Copyright © 2026 [Ilya Tolstoukhov](https://github.com/myldy20), using the project name **Myldy design / @myldy20**.
+**Unofficial.** Neither Ableton nor NAMix maintainers endorse or support this project.
