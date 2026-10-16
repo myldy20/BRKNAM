@@ -13,6 +13,13 @@ sudo apt-get install -y git build-essential cmake ninja-build pkg-config \
   libjack-jackd2-dev binutils gcc-12 g++-12
 ```
 
+Ubuntu 22.04's apt CMake may be too old. Upgrade to CMake 3.25+ before building, for example:
+
+```bash
+python3 -m pip install --user cmake==3.30.9
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 CMake >= 3.25, GCC 12+ (GCC 11's libstdc++ cannot compile std::atomic<std::shared_ptr>) and network access to clone NAMix and its submodules are required. For Apple Silicon use an Ubuntu 22.04 `linux/amd64` container or download the GitHub Actions artifact; macOS binaries cannot be loaded on Push.
 
 ```bash
