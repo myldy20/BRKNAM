@@ -22,6 +22,10 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Shell syntax
         run: bash -n scripts/build-linux.sh
+      - name: Install modern CMake (NAMix requires >= 3.25)
+        run: |
+          python3 -m pip install --user cmake==3.30.9
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Install pinned-build prerequisites
         run: |
           sudo apt-get update
