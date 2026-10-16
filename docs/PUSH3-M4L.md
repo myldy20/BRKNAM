@@ -34,6 +34,29 @@ ssh -i ~/.ssh/push3_rsa ableton@push.local '
 
 Compare the **ABI-REPORT.txt** in the artifact to the specific runtime on the Push. `GLIBCXX` and `CXXABI` symbol requirements matter alongside `GLIBC`. Do not swap system `libstdc++` to make an incompatible module load; fix the build/toolchain instead.
 
+## User package directories found on the actual Push
+
+The owner confirmed AbletonOS 3.21, plus these two *existing* Max 9 directories:
+
+- `/data/.local/share/Max 9/Packages`
+- `/data/.config/Cycling '74/Max 9/Packages`
+
+**Their existence alone does not prove which is on Max's active search path.** Inspect the contents and use Max console/search path evidence first. On the Mac, after checking out this branch, the read-only command is:
+
+```sh
+python3 scripts/push-m4l.py doctor --host push.local --key ~/.ssh/push3_rsa
+```
+
+When the active directory is confirmed, download **BRKNAM-Push3-M4L-Linux** from the [successful CI run](https://github.com/myldy20/BRKNAM/actions/runs/38963624643). GitHub's artifact is a ZIP containing a `.tar.gz`; extract the ZIP on your Mac, then dry-run:
+
+```sh
+python3 scripts/push-m4l.py stage \
+  --archive /path/to/BRKNAM-Push3-M4L-linux-x86_64.tar.gz \
+  --packages-root "/data/.local/share/Max 9/Packages"
+```
+
+The example root is **not yet confirmed active**. The tool rejects other directories, path-traversal archives, unexpected file types, oversized payloads and binary ABI reports without PASS, and refuses to overwrite an existing BRKNAM package. Without `--confirm-stage` the command contacts no remote host and changes nothing. Only after validating the active root and independently backing up relevant user files should you add `--confirm-stage` to perform an opt-in transfer. The script does not edit Max search paths, restart Live or install an `.amxd`.
+
 ## Phase C: prove the external is discoverable
 
 Work with a copy of the diagnostic `.amxd` device, keep input/output gains low, and back up User Library. Do **not** overwrite pre-existing externals. Use the exact user-writable Max package path discovered on the device and a uniquely named BRKNAM package. If the Max device is frozen, verify the included Linux file is actually the one loaded.
