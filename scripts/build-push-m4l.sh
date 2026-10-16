@@ -5,6 +5,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$ROOT/.build/neural_tilde"
 BUILD="$ROOT/.build/neural-build"
+DSPTOOL="$ROOT/.build/AudioDSPTools"
+DSPREV="0827c6c2fc0deced568536142ea86f189e0b98a1"
 PROBE="$ROOT/.build/brknam_probe~.mxl_x86_64"
 ARTIFACT="$ROOT/.build/package"
 ZIP="$ROOT/dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz"
@@ -21,6 +23,14 @@ git -C "$SOURCE" fetch --quiet --no-tags origin "$REV"
 git -C "$SOURCE" checkout --quiet --detach "$REV"
 git -C "$SOURCE" submodule update --init --recursive --quiet
 [[ "$(git -C "$SOURCE" rev-parse HEAD)" == "$REV" ]] || { echo "Upstream revision mismatch" >&2; exit 1; }
+# Older neural~ expected this header under NAM Core's Dependencies; the pinned
+# NeuralAudio core now carries a different source layout.
+if [[ ! -d "$DSPTOOL/.git" ]]; then git clone -q https://github.com/sdatkinson/AudioDSPTools.git "$DSPTOOL"; fi
+git -C "$DSPTOOL" fetch --quiet --no-tags origin "$DSPREV"
+git -C "$DSPTOOL" checkout --quiet --detach "$DSPREV"
+test -f "$DSPTOOL/dsp/ResamplingContainer/ResamplingContainer.h" || {
+  echo "Pinned AudioDSPTools missing ResamplingContainer" >&2; exit 1;
+}
 
 # Ubuntu 22.04's GCC 11/libstdc++ lacks C++20 atomic<shared_ptr>.
 # Upstream's CMake currently pins C++17 and Windows/macOS target output.
@@ -39,6 +49,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 '''
 if patch not in s:s+=patch
+# Add the missing resampling header from the MIT-licensed pinned AudioDSPTools checkout.
+s+= '\\n' + 'target_include_directories(neural_tilde SYSTEM PRIVATE "' + str(p.parent.parent / 'AudioDSPTools/dsp') + '")\\n'
 p.write_text(s)
 PY
 cmake -S "$SOURCE" -B "$BUILD" -DSUPERBUILD=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
@@ -69,6 +81,7 @@ cp "$NEURAL" "$ARTIFACT/externals/neural~.mxl_x86_64"
 cp "$PROBE" "$ARTIFACT/externals/brknam_probe~.mxl_x86_64"
 cp "$ROOT/patchers/BRKNAM Probe.maxpat" "$ARTIFACT/patchers/"
 cp "$SOURCE/LICENSE" "$ARTIFACT/LICENSES/neural-LICENSE"
+cp "$DSPTOOL/LICENSE" "$ARTIFACT/LICENSES/AudioDSPTools-LICENSE"
 cp "$ROOT/LICENSE" "$ARTIFACT/LICENSES/BRKNAM-LICENSE"
 cp "$ROOT/NOTICE" "$ARTIFACT/LICENSES/BRKNAM-NOTICE"
 {
