@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/push3-m4l.yml"
       - "scripts/build-push-m4l.sh"
+      - "scripts/push-m4l.py"
       - "scripts/check-push-abi.py"
       - "src/**"
       - "patchers/**"
