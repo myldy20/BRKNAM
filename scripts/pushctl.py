@@ -11,7 +11,7 @@ import tempfile
 import uuid
 
 STAGE_DIR = "/data/.vst3"
-MODELS_DIR = "/data/Music/Ableton/User Library/BRKNAM Models"
+MODELS_DIR = "/data/brknam/models"\nPRESETS_DIR = "/data/Music/Ableton/User Library/BRKNAM Presets"
 
 class StageError(ValueError):
     pass
@@ -111,13 +111,29 @@ def upload_model(args):
     import shlex
     target = f"{MODELS_DIR}/{model.name}"
     ssh(args, f"set -e; mkdir -p {shlex.quote(MODELS_DIR)}; test ! -e {shlex.quote(target)}")
-    scp(args, model, shlex.quote(target))
+    tmp = f"/data/.brknam-upload-{uuid.uuid4().hex[:12]}"
+    scp(args, model, tmp)
+    ssh(args, f"set -e; test ! -e {shlex.quote(target)}; mv {tmp} {shlex.quote(target)}")
     print(f"Copied model to {target}. No activation or audio changes.")
+
+def upload_preset(args):
+    import shlex
+    preset = pathlib.Path(args.preset).expanduser()
+    if not preset.is_file() or preset.suffix.lower() != ".vstpreset":
+        raise StageError("expected an existing .vstpreset file")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. ()-]{0,149}\\.vstpreset", preset.name, re.IGNORECASE):
+        raise StageError("use a simple ASCII .vstpreset filename")
+    target = f"{PRESETS_DIR}/{preset.name}"
+    tmp = f"/data/.brknam-upload-{uuid.uuid4().hex[:12]}"
+    ssh(args, f"set -e; mkdir -p {shlex.quote(PRESETS_DIR)}; test ! -e {shlex.quote(target)}")
+    scp(args, preset, tmp)
+    ssh(args, f"set -e; test ! -e {shlex.quote(target)}; mv {tmp} {shlex.quote(target)}")
+    print(f"Copied preset to {target}. Browser Bridge loading unverified.")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("doctor", "stage", "upload-model"):
+    for name in ("doctor", "stage", "upload-model", "upload-preset"):
         command = sub.add_parser(name)
         command.add_argument("--host", default="push.local")
         command.add_argument("--user", default="ableton")
@@ -128,7 +144,7 @@ def main(argv=None):
             command.add_argument("--model", required=True)
     args = parser.parse_args(argv)
     try:
-        {"doctor": doctor, "stage": stage, "upload-model": upload_model}[args.command](args)
+        {"doctor": doctor, "stage": stage, "upload-model": upload_model, "upload-preset": upload_preset}[args.command](args)
     except (StageError, OSError, subprocess.CalledProcessError) as exc:
         print(f"BRKNAM: {exc}", file=sys.stderr)
         return 1

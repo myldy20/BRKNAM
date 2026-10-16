@@ -29,7 +29,7 @@ python3 scripts/pushctl.py upload-model --model /path/to/model.nam \
   --host push.local --user ableton --key ~/.ssh/push3_rsa
 ```
 
-This writes into `/data/Music/Ableton/User Library/BRKNAM Models` without overwriting existing files.
+This writes into `/data/brknam/models` without overwriting existing files.
 
 ## Scanner activation (manual, separate opt-in)
 
@@ -50,3 +50,18 @@ For initial audio verification record a short DI loop, monitor safely at low vol
 The user-level VST3 staged files are removable from `/data/.vst3` after stopping Live. Do not remove any bundle you did not install yourself; archive files you want to preserve. For a scanner-setting change restore the *exact* backed-up `Preferences.cfg` while Live is stopped, then restart Live normally. Never edit or flash `/boot`, `/opt`, licenses, firmware or kernel settings.
 
 If full Push Hack was installed, uninstall it **before** updating AbletonOS: its display hook interposes on firmware-transfer USB I/O and can freeze an update.
+
+## Offline model/IR presets (experimental)
+
+Upstream NAMix v0.9.0 serializes a `getState` v3 structure containing the model and IR paths. We can generate a standard Steinberg `.vstpreset` binary with that state even without NAMix's desktop UI:
+
+```bash
+python3 scripts/namix_preset.py --model "my A2 lite" --ir "cab 212"
+python3 scripts/pushctl.py upload-preset \
+  --preset "dist/presets/NAMix - my A2 lite.vstpreset" \
+  --host push.local --user ableton --key ~/.ssh/push3_rsa
+```
+
+Upload the corresponding `my A2 lite.nam` and `cab 212.wav` assets to `/data/brknam/models` (the `upload-model` command transfers `.nam`; IR transfer is still manual). Live indexes `.vstpreset` files in the User Library; Browser Bridge can address them by plugin/preset name.
+
+**The binary format is covered by offline tests but the resulting preset is not yet confirmed to load NAMix and its model on Push 3.** This is the next hardware validation gate. A `.vstpreset` file holds absolute paths and will not be portable to a different filesystem layout without rewriting those paths.

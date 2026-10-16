@@ -30,7 +30,7 @@ To scan and actually load the effect, follow [docs/PUSH3-BRINGUP.md](docs/PUSH3-
 - Native Linux x86_64 effect; NAM/A2 loading is provided by upstream NAMix.
 - NAMix already includes gate, tone stack, cabinet IR and a model/IR path state interface.
 - Build pinned to Ubuntu 22.04 / glibc 2.35, with ABI and archive checks.
-- Read-only SSH diagnostics; non-destructive plugin and model staging.
+- Read-only SSH diagnostics; non-destructive plugin, model, and experimental preset staging.\n- Offline NAMix `.vstpreset` generator for model/IR paths (pending Push validation).
 - Hardware sound, CPU load, latency, preset recall and Push encoder mapping: **still unverified**.
 
 ## Former BRKNAM
