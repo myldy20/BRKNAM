@@ -10,6 +10,10 @@ on:
       - "README.md"
   workflow_dispatch:
 
+concurrency:
+  group: brknam-push3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-and-build:
     runs-on: ubuntu-22.04
