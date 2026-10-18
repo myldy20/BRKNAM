@@ -83,6 +83,11 @@ validate() {
 }
 validate "$NEURAL"
 validate "$PROBE"
+# Min API registration must name the signal object with its final "~" suffix.
+# The source filename is brknam_probe.cpp and cannot infer that spelling.
+strings "$PROBE" | grep -Fq 'brknam_probe~' || {
+  echo "probe does not register brknam_probe~ as Max class" >&2; exit 1;
+}
 
 rm -rf "$ARTIFACT"
 mkdir -p "$ARTIFACT/externals" "$ARTIFACT/patchers" "$ARTIFACT/LICENSES"
@@ -92,6 +97,8 @@ cp "$ROOT/patchers/BRKNAM Probe.maxpat" "$ARTIFACT/patchers/"
 python3 "$ROOT/scripts/build-probe-amxd.py" --output "$ARTIFACT/patchers/BRKNAM Probe.amxd"
 python3 "$ROOT/scripts/create-mapped-probe.py" --output "$ARTIFACT/patchers/BRKNAM Probe Mapped.maxpat"
 python3 "$ROOT/scripts/build-probe-amxd.py" --source "$ARTIFACT/patchers/BRKNAM Probe Mapped.maxpat" --output "$ARTIFACT/patchers/BRKNAM Probe Mapped.amxd"
+python3 "$ROOT/scripts/create-ab-probe.py" --output "$ARTIFACT/patchers/BRKNAM Probe AB.maxpat"
+python3 "$ROOT/scripts/build-probe-amxd.py" --source "$ARTIFACT/patchers/BRKNAM Probe AB.maxpat" --output "$ARTIFACT/patchers/BRKNAM Probe AB.amxd"
 cp "$SOURCE/LICENSE" "$ARTIFACT/LICENSES/neural-LICENSE"
 cp "$DSPTOOL/LICENSE" "$ARTIFACT/LICENSES/AudioDSPTools-LICENSE"
 cp "$ROOT/LICENSE" "$ARTIFACT/LICENSES/BRKNAM-LICENSE"
