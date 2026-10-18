@@ -23,6 +23,7 @@ class M4LSmoke(unittest.TestCase):
             self.assertNotIn(forbidden,t)
     def test_probe_exports_max_entry(self):
         t=(ROOT/"src/brknam_probe.cpp").read_text()
-        self.assertIn("MIN_EXTERNAL(brknam_probe)",t)
+        self.assertIn("MIN_EXTERNAL_CUSTOM(brknam_probe, brknam_probe~)",t)
+        self.assertNotIn("MIN_EXTERNAL(brknam_probe)",t)
         self.assertIn('status.send("ready")',t)
 if __name__=="__main__":unittest.main()
