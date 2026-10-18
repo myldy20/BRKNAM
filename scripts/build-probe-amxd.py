@@ -26,8 +26,10 @@ def build(path):
     for required in ("plugin~", "plugout~", "brknam_probe~", "live.thisdevice"):
         if required not in objects:
             raise ValueError(f"missing required Max object: {required}")
-    if "parameters" in p and p["parameters"].get("parameterbanks"):
-        raise ValueError("remove parameterbanks for this diagnostic device")
+    if "parameters" in p:
+        banks = p["parameters"].get("parameterbanks") or {}
+        if banks and all(not bank.get("parameters") for bank in banks.values()):
+            raise ValueError("empty parameterbanks can crash the Live Max parameter handler")
     if p.get("project", {}).get("amxdtype") != 1633771873:
         raise ValueError("expected an audio-effect Max project type")
     data = raw + (b"" if raw.endswith(b"\x00") else b"\x00")
