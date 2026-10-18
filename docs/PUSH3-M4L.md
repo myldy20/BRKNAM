@@ -161,3 +161,32 @@ Once Phase C is confirmed, replace the probe with `neural~` in a throwaway test 
 Keep Live and Max stopped before removing your manually installed BRKNAM package from user-writable space. Restore the backed-up `.amxd` or Live Set. No changes to firmware, licensing, /opt, /boot or Live's VST3 preferences should have occurred.
 
 Official guidance: [Ableton Max for Live Production Guidelines](https://github.com/Ableton/maxdevtools/blob/main/m4l-production-guidelines/m4l-production-guidelines.md), including Push-specific Linux external builds and `live.banks`.
+
+
+## Correcting a native Max class-name mismatch (2026-10-18)
+
+On the real Push, `BRKNAM Probe Mapped.amxd` loads, and its Gain appears
+on the encoder, but left-channel output from `brknam_probe~` is silent at
+all Gain settings.
+
+Cycling '74 [Min API macro documentation](https://github.com/Cycling74/min-api/blob/main/include/c74_min_api.h)
+shows that `MIN_EXTERNAL(classname)` derives the Max object name from the
+**source filename**, replacing only the suffix `_tilde.cpp` with `~`.
+Our probe source was named `brknam_probe.cpp`, so
+`MIN_EXTERNAL(brknam_probe)` registered `brknam_probe` (no tilde).
+The `.mxl_x86_64` file and the Max patch, however, use `brknam_probe~`.
+
+Corrected source: `MIN_EXTERNAL_CUSTOM(brknam_probe, brknam_probe~)`, which
+registers the exact Max object requested by the patch. This is a
+**source-confirmed naming bug and likely cause** of the silence; actual
+device playback must still confirm the fix.
+
+The earlier Max and M4L test files remain. A new dry/C++ A/B diagnostic
+can independently distinguish a Max-only signal route from the native
+external route.
+
+To update an already staged package, `push-m4l.py stage` must not be used:
+it correctly refuses to overwrite existing BRKNAM contents. Close the
+test Set, back up only our prior `brknam_probe~.mxl_x86_64` in user space,
+replace that module atomically, then restart Push from its UI before
+re-testing at low gain. Never change system Max directories or Live prefs.
