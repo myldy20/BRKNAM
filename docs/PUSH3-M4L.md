@@ -99,6 +99,45 @@ or bundle the Linux external as a device dependency.
 **Offline-generated .amxd is not yet certified as a functioning Live device.
 Keep any test to a disposable Live Set.**
 
+### BRKNAM Probe Mapped: one Push encoder
+
+The first on-device diagnostic `BRKNAM Probe.amxd` was inserted successfully
+on an audio track and appears on Push's device screen, displaying
+**"No parameters mapped"**. That is normal for the original probe: it has
+no `live.dial` or parameter bank. **It only proves the Max for Live
+wrapper loaded; it does not prove that the `brknam_probe~` C++ object
+resolved or processed audio.**
+
+A separate variant `BRKNAM Probe Mapped.amxd` now contains:
+
+- One **Gain** `live.dial` with a saved parameter, range 0–2, default 1;
+- A persistent `BRKNAM` bank assigning Gain to Push encoder 1 (using the
+  parameterbanks dictionary structure from Ableton's own CPU Reporter);
+- A smoothing `line~` and `*~` AFTER the native `brknam_probe~`, so the
+  audio must still travel through the C++ module;
+- Left processed channel, right dry channel, and the original status auto-ping.
+
+The explicit parameter bank is stored in the patch, so it does not rely on
+a runtime `new` message during device initialization. The bank and
+`.amxd` are **not yet tested on the real Push**.
+
+Generate without replacing the original diagnostic device:
+
+```sh
+git -C /tmp/brknam-push3 pull --ff-only
+python3 /tmp/brknam-push3/scripts/create-mapped-probe.py \
+  --output /tmp/"BRKNAM Probe Mapped.maxpat"
+python3 /tmp/brknam-push3/scripts/build-probe-amxd.py \
+  --source /tmp/"BRKNAM Probe Mapped.maxpat" \
+  --output ~/Downloads/"BRKNAM Probe Mapped.amxd"
+```
+
+Transfer the new `.amxd` through Live's Push browser into an empty test set,
+keeping the old diagnostic device separate. If the Gain control shows up,
+turn it between 0 and 1 while playing a low-level audio clip.
+An encoder appearing does not yet establish that the native DSP was loaded:
+verify left-channel audio passthrough and status/log messages.
+
 ## Phase C: prove the external is discoverable
 
 Work with a copy of the diagnostic `.amxd` device, keep input/output gains low, and back up User Library. Do **not** overwrite pre-existing externals. Use the exact user-writable Max package path discovered on the device and a uniquely named BRKNAM package. If the Max device is frozen, verify the included Linux file is actually the one loaded.
