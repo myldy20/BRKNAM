@@ -190,3 +190,39 @@ it correctly refuses to overwrite existing BRKNAM contents. Close the
 test Set, back up only our prior `brknam_probe~.mxl_x86_64` in user space,
 replace that module atomically, then restart Push from its UI before
 re-testing at low gain. Never change system Max directories or Live prefs.
+
+
+### Updating the already installed probe without overwriting the whole package
+
+The user already has both native modules staged. The latest Actions artifact
+includes a corrected **only-probe replacement**, and there is a dedicated
+`scripts/replace-probe.py` script that verifies the archive and class name
+before touching the device.
+
+After downloading and unzipping the updated CI artifact on the Mac, and
+**saving + closing the test Live Set on Push**, run:
+
+```sh
+git -C /tmp/brknam-push3 pull --ff-only
+python3 /tmp/brknam-push3/scripts/replace-probe.py \
+  --archive ~/Downloads/BRKNAM-Push3-M4L-linux-x86_64.tar.gz
+```
+
+The first command is a dry run and doesn't SSH into Push. Then explicitly
+approve replacement:
+
+```sh
+python3 /tmp/brknam-push3/scripts/replace-probe.py \
+  --archive ~/Downloads/BRKNAM-Push3-M4L-linux-x86_64.tar.gz \
+  --confirm-replace
+```
+
+The script backs up the old, user-owned
+`brknam_probe~.mxl_x86_64` at
+`brknam_probe~.mxl_x86_64.before-tilde-fix`, refuses to overwrite that
+backup, and atomically swaps just the probe. `neural~` remains untouched.
+Restart Push from its own UI to reload the native Max external. Verify the
+existing `BRKNAM Probe Mapped.amxd` first, with Gain = 1 and a known
+non-silent left input. Expect audible left and dry right. The original device
+and the A/B diagnostic are both available if further investigation is needed.
+No changes to /opt, system shared libraries, settings or authorization.
