@@ -23,4 +23,7 @@ class brknam_probe : public object<brknam_probe>, public sample_operator<1, 1> {
   sample operator()(sample x) { return x; }
 };
 
-MIN_EXTERNAL(brknam_probe);
+// The default MIN_EXTERNAL would use brknam_probe.cpp as the Max class name,
+// i.e. register "brknam_probe" (without the trailing tilde).
+// Match the brknam_probe~ object used in the Max for Live patches.
+MIN_EXTERNAL_CUSTOM(brknam_probe, brknam_probe~);
