@@ -8,6 +8,8 @@ on:
       - "scripts/push-m4l.py"
       - "scripts/build-probe-amxd.py"
       - "scripts/create-mapped-probe.py"
+      - "scripts/create-ab-probe.py"
+      - "scripts/replace-probe.py"
       - "scripts/check-push-abi.py"
       - "src/**"
       - "patchers/**"
@@ -47,6 +49,7 @@ jobs:
           tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'externals/brknam_probe~.mxl_x86_64'
           tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe.amxd'
           tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe Mapped.amxd'
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe AB.amxd'
       - uses: actions/upload-artifact@v4
         with:
           name: BRKNAM-Push3-M4L-Linux
