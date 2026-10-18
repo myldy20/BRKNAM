@@ -1,0 +1,57 @@
+name: BRKNAM Push 3 Linux Max external
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/push3-m4l.yml"
+      - "scripts/build-push-m4l.sh"
+      - "scripts/push-m4l.py"
+      - "scripts/build-probe-amxd.py"
+      - "scripts/create-mapped-probe.py"
+      - "scripts/create-ab-probe.py"
+      - "scripts/replace-probe.py"
+      - "scripts/check-push-abi.py"
+      - "src/**"
+      - "patchers/**"
+      - "tests/**"
+      - "docs/**"
+      - "README.md"
+  workflow_dispatch:
+
+concurrency:
+  group: brknam-m4l-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-max:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit and patcher checks
+        run: |
+          python3 -m unittest discover -s tests -v
+          bash -n scripts/build-push-m4l.sh
+      - name: Install GCC 12 and tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-12 g++-12 git cmake ninja-build binutils file pkg-config
+      - name: Build Linux Max externals
+        env:
+          CC: gcc-12
+          CXX: g++-12
+          JOBS: "2"
+        run: bash scripts/build-push-m4l.sh
+      - name: Inspect package
+        run: |
+          test -f dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'externals/neural~.mxl_x86_64'
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'externals/brknam_probe~.mxl_x86_64'
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe.amxd'
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe Mapped.amxd'
+          tar -tzf dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz | grep -F 'patchers/BRKNAM Probe AB.amxd'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BRKNAM-Push3-M4L-Linux
+          path: dist/BRKNAM-Push3-M4L-linux-x86_64.tar.gz
+          if-no-files-found: error

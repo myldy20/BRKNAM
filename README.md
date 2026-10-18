@@ -1,94 +1,41 @@
-# BRKNAM
+# BRKNAM for Push 3 Standalone — Max for Live Linux experiment
 
-**Minimal open-source NAM librarian and DAW player.**
+**Status: experimental. A compiled Linux Max external has not yet been verified inside Max on a physical Push 3.**
 
-BRKNAM is a local-first tool for finding, auditioning, organizing, and playing Neural Amp Modeler captures without forcing an account, a cloud library, or a giant amp-suite interface.
+BRKNAM's primary direction is now a **native Linux Max for Live audio effect** on Push 3 Standalone. We aim to run NAM A2-Lite captures in the device's existing Max 9 engine without changing AbletonOS, firmware, Live's license, or its hidden third-party VST3-scanning preference.
 
-> Find the tone. Skip the bullshit.
+## Phase 0: verify the Linux Max external loader
 
-## Status
+The CI build contains two native x86-64 Max externals:
 
-**E1 — Local library foundation is complete.**
+- `brknam_probe~.mxl_x86_64`: a tiny BRKNAM signal-through external with a `ping` message. This proves the load path, DSP registration and audio in/out without needing a neural model.
+- `neural~.mxl_x86_64`: [Alessandro Presta's neural~](https://github.com/apresta/neural_tilde) compiled with an isolated, documented Linux-specific CMake adaptation. It already implements NAM/AIDA-X loading, resampling, and model switching. It is named `neural~` and includes the upstream MIT license.
 
-BRKNAM can recursively discover local NAM/IR assets, safely read NAM metadata without loading model weights, persist multiple library roots in SQLite, maintain an incremental index, track missing files, and search metadata and user tags through FTS5.
+Use the [test patch source](patchers/BRKNAM%20Probe.maxpat) in desktop Max 9 to create a Max Audio Effect, and follow [Push bring-up](docs/PUSH3-M4L.md) for on-device testing. The `.maxpat` source has not been verified as an installable standalone `.amxd`; opening and saving it as a Max for Live device in Live on the Mac is part of the validation.
 
-Content hashes are calculated only when needed. BRKNAM can identify byte-identical duplicates and preserve an asset's database identity, favorites, ratings, tags, and recent state when a previously hashed file is safely recognized after a rename or move. Saved searches and stable JSON CLI output are included.
-
-**E2 — One-slot NAM player is feature-complete for automated validation and is entering manual alpha testing.**
-
-The current product shell builds as a Windows/macOS standalone application, VST3, and macOS Audio Unit. It uses the pinned NeuralAmpModelerCore, supports representative A1/A2 models, loads models outside the audio thread, performs click-reduced block-boundary replacement, adapts model sample rates, and reports processing latency to the host. Steinberg VST3 Validator, Apple `auval`, cross-platform reference tests, and concurrent switching stress tests pass in CI.
-
-Unsigned downloadable test packages are produced by the **Alpha packages** GitHub Actions workflow. See [the alpha test guide](docs/ALPHA_TESTING.md) before installing them.
-
-## Product principles
-
-- **Local-first:** existing `.nam` and IR files remain usable offline and in place.
-- **No mandatory account:** online providers are optional adapters, not the product core.
-- **Fast auditioning:** compare many captures against the same recorded DI loop.
-- **Small native UI:** a practical browser/player, not another virtual showroom.
-- **Realtime-safe audio:** no file I/O, network calls, locks, or allocation in the audio callback.
-- **Open formats:** portable presets and an inspectable local index.
-
-## Build the core and tools
-
-Requirements: CMake 3.24+, a C++20 compiler, and internet access during the first default configure so CMake can download the pinned SQLite amalgamation. A compatible system SQLite can be selected explicitly.
+Build (Ubuntu 22.04 x86_64, see [instructions](docs/LINUX-BUILD.md)):
 
 ```sh
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+bash scripts/build-push-m4l.sh
+python3 -m unittest discover -s tests -v
 ```
 
-Use a system SQLite installation instead:
+A successful Linux build is **not evidence** Max accepts or runs the external on Push. Testing requires checking its Max 9 native ABI, the Max object search path, real-time stability, and model loading with a small legitimate A2-Lite `.nam` capture.
 
-```sh
-cmake -S . -B build -DBRKNAM_USE_SYSTEM_SQLITE=ON
-```
+## Roadmap
 
-On multi-config generators, add `--config Release` when building and `-C Release` when testing.
+1. Linux `brknam_probe~` external loads in the Push's Max 9 and performs unity-gain passthrough.
+2. Linux `neural~` loads in the same environment and passes a silent/bypass smoke test.
+3. NAM A2-Lite model + audio + CPU/xrun tests at 48 kHz, including stop/restart and scene switching.
+4. Dedicated BRKNAM `.amxd` wrapper with eight Push encoders via `live.banks`, gain, mix, state recall, model browse/selection and trustworthy status indication.
+5. Optional refactoring into BRKNAM-owned DSP using the desktop-era C++ code.
 
-### Current tools
+The former desktop BRKNAM is preserved at [archive/brknam-desktop-20260804](https://github.com/myldy20/BRKNAM/tree/archive/brknam-desktop-20260804). The [independent VST3 feasibility prototype](https://github.com/myldy20/BRKNAM/pull/20) remains available but is not the primary approach.
 
-```sh
-./build/brknam-scan /path/to/your/NAM/library
-./build/brknam-inspect /path/to/model.nam
+## Safety and licenses
 
-./build/brknam-library library.sqlite3 index /path/to/your/NAM/library
-./build/brknam-library library.sqlite3 search "5150 crunch"
-./build/brknam-library library.sqlite3 hash 42
-./build/brknam-library library.sqlite3 duplicates 42
+**This repository is not endorsed by Ableton or Cycling '74.** Third-party Linux Max externals must match the particular Push firmware's Max engine, C++ runtime and dependency paths. Do not test during a live show. CI never SSHes into Push.
 
-./build/brknam-library library.sqlite3 save-search "High gain" "5150 crunch" 0 100
-./build/brknam-library library.sqlite3 list-searches
-./build/brknam-library library.sqlite3 run-search 1
-```
+Project code: GPL-3.0-or-later, see [LICENSE](LICENSE) and [NOTICE](NOTICE). neural~ is MIT; its source is fetched from the official pinned upstream. See [THIRD_PARTY.md](THIRD_PARTY.md). No commercial `.nam` models are distributed.
 
-Put `--json` before the database path to receive stable machine-readable output and diagnostics:
-
-```sh
-./build/brknam-library --json library.sqlite3 search "5150 crunch"
-```
-
-## Build the plugin shell
-
-The optional product build fetches the pinned NeuralAmpModelerCore, iPlug2, and official Steinberg VST3 SDK sources.
-
-```sh
-cmake -S . -B build-plugin \
-  -DBRKNAM_ENABLE_IPLUG2=ON \
-  -DBRKNAM_BUILD_TESTS=OFF \
-  -DBRKNAM_BUILD_TOOLS=OFF \
-  -DIPLUG_DEPLOY_PLUGINS=OFF \
-  -DCMAKE_BUILD_TYPE=Release
-cmake --build build-plugin --config Release
-```
-
-Current targets are Windows/macOS standalone, VST3, and macOS AU. Later targets include CLAP and Linux packaging.
-
-See [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), [product definition](docs/PRODUCT.md), and [alpha test guide](docs/ALPHA_TESTING.md).
-
-## Licensing
-
-BRKNAM is licensed under **GNU GPL v3 or later**. Copyright and origin notices must be preserved as described in [`NOTICE`](NOTICE).
-
-Copyright © 2026 [Ilya Tolstoukhov](https://github.com/myldy20), using the project name **Myldy design / @myldy20**.
+Issue: [#19 — Push 3 Native NAM](https://github.com/myldy20/BRKNAM/issues/19).
